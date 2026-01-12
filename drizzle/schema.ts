@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,4 +25,52 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Member profile table for BtoB users
+ * Stores business-specific information
+ */
+export const memberProfiles = mysqlTable("member_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  /** 担当者名 */
+  contactName: varchar("contactName", { length: 255 }).notNull(),
+  /** 会社名または店舗名 */
+  companyName: varchar("companyName", { length: 255 }).notNull(),
+  /** メールアドレス */
+  contactEmail: varchar("contactEmail", { length: 320 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MemberProfile = typeof memberProfiles.$inferSelect;
+export type InsertMemberProfile = typeof memberProfiles.$inferInsert;
+
+/**
+ * Subscription table for managing Stripe subscriptions
+ * Only stores essential Stripe IDs - fetch details from Stripe API
+ */
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  /** Stripe Customer ID */
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  /** Stripe Subscription ID */
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  /** Subscription status: active, canceled, past_due, etc. */
+  status: mysqlEnum("status", ["active", "canceled", "past_due", "trialing", "incomplete", "incomplete_expired", "unpaid"]).default("incomplete").notNull(),
+  /** Subscription start date (Unix timestamp in milliseconds) */
+  startedAt: bigint("startedAt", { mode: "number" }),
+  /** Initial period end date - 1 year from start (Unix timestamp in milliseconds) */
+  initialPeriodEndsAt: bigint("initialPeriodEndsAt", { mode: "number" }),
+  /** Whether user is in initial 1-year period (cannot cancel without penalty) */
+  isInInitialPeriod: boolean("isInInitialPeriod").default(true).notNull(),
+  /** Current period end date (Unix timestamp in milliseconds) */
+  currentPeriodEnd: bigint("currentPeriodEnd", { mode: "number" }),
+  /** Canceled at timestamp (Unix timestamp in milliseconds) */
+  canceledAt: bigint("canceledAt", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

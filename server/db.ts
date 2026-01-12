@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, memberProfiles, subscriptions, InsertMemberProfile, InsertSubscription } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,72 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ==================== Member Profile Queries ====================
+
+export async function getMemberProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(memberProfiles).where(eq(memberProfiles.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertMemberProfile(profile: InsertMemberProfile) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(memberProfiles).values(profile).onDuplicateKeyUpdate({
+    set: {
+      contactName: profile.contactName,
+      companyName: profile.companyName,
+      contactEmail: profile.contactEmail,
+    },
+  });
+}
+
+// ==================== Subscription Queries ====================
+
+export async function getSubscription(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getSubscriptionByStripeCustomerId(stripeCustomerId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.stripeCustomerId, stripeCustomerId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getSubscriptionByStripeSubscriptionId(stripeSubscriptionId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createSubscription(subscription: InsertSubscription) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(subscriptions).values(subscription);
+}
+
+export async function updateSubscription(userId: number, updates: Partial<InsertSubscription>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(subscriptions).set(updates).where(eq(subscriptions.userId, userId));
+}
+
+export async function updateSubscriptionByStripeId(stripeSubscriptionId: string, updates: Partial<InsertSubscription>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(subscriptions).set(updates).where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
+}
