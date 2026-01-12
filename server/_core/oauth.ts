@@ -44,7 +44,35 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // Get user from database to check profile and subscription status
+      const dbUser = await db.getUserByOpenId(userInfo.openId);
+      
+      if (dbUser) {
+        // Check if user has a member profile
+        const profile = await db.getMemberProfile(dbUser.id);
+        
+        if (!profile) {
+          // No profile - redirect to registration
+          res.redirect(302, "/register");
+          return;
+        }
+        
+        // Check subscription status
+        const subscription = await db.getSubscription(dbUser.id);
+        
+        if (!subscription || subscription.status !== "active") {
+          // No active subscription - redirect to subscription page
+          res.redirect(302, "/subscription");
+          return;
+        }
+        
+        // Has profile and active subscription - redirect to app home
+        res.redirect(302, "/home");
+        return;
+      }
+
+      // Fallback - redirect to register if user not found (shouldn't happen)
+      res.redirect(302, "/register");
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

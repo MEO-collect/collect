@@ -71,6 +71,10 @@ export default function Home() {
     }
   }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription, setLocation]);
 
+  const handleLogin = () => {
+    window.location.href = getLoginUrl();
+  };
+
   if (authLoading || (isAuthenticated && (profileLoading || subscriptionLoading))) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -87,7 +91,7 @@ export default function Home() {
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="font-semibold">BtoB AIプラットフォーム</span>
           </div>
-          <Button onClick={() => window.location.href = getLoginUrl()}>ログイン</Button>
+          <Button onClick={handleLogin} type="button">ログイン</Button>
         </div>
       </header>
 
@@ -105,10 +109,15 @@ export default function Home() {
             会議や面談の音声を録音するだけで、AIが自動で書き起こし、議事録やカルテを生成。業務時間を大幅に削減します。
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" onClick={() => window.location.href = getLoginUrl()}>
+            <Button size="lg" onClick={handleLogin} type="button">
               無料で始める<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}>
+            <Button 
+              size="lg" 
+              variant="outline" 
+              type="button"
+              onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+            >
               機能を見る
             </Button>
           </div>
@@ -159,7 +168,7 @@ export default function Home() {
               <div className="text-center">
                 <div className="text-4xl font-bold text-primary mb-2">¥0</div>
                 <div className="text-muted-foreground mb-6">テスト期間中は無料</div>
-                <Button className="w-full" size="lg" onClick={() => window.location.href = getLoginUrl()}>今すぐ始める</Button>
+                <Button className="w-full" size="lg" onClick={handleLogin} type="button">今すぐ始める</Button>
                 <p className="text-xs text-muted-foreground mt-4">クレジットカード登録が必要です</p>
               </div>
             </div>
@@ -171,7 +180,7 @@ export default function Home() {
         <div className="container text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">今すぐ始めましょう</h2>
           <p className="mb-8 opacity-90">面倒な議事録作成から解放されて、本来の業務に集中しませんか？</p>
-          <Button size="lg" variant="secondary" onClick={() => window.location.href = getLoginUrl()}>
+          <Button size="lg" variant="secondary" onClick={handleLogin} type="button">
             無料で始める<ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

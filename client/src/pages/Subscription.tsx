@@ -32,13 +32,20 @@ export default function Subscription() {
     onSuccess: (data) => {
       if (data.url) {
         toast.info("決済ページに移動します");
-        window.open(data.url, "_blank");
+        // 同じタブで遷移
+        window.location.href = data.url;
       }
     },
     onError: (error) => {
+      console.error("Checkout error:", error);
       toast.error(error.message || "エラーが発生しました");
     },
   });
+
+  const handleSubscribe = () => {
+    console.log("Subscribe button clicked");
+    createCheckout.mutate();
+  };
 
   // プロファイル未登録の場合は登録ページへ
   useEffect(() => {
@@ -75,6 +82,7 @@ export default function Subscription() {
           <CardContent>
             <Button 
               className="w-full" 
+              type="button"
               onClick={() => window.location.href = getLoginUrl()}
             >
               ログイン
@@ -140,7 +148,8 @@ export default function Subscription() {
           <Button 
             className="w-full"
             size="lg"
-            onClick={() => createCheckout.mutate()}
+            type="button"
+            onClick={handleSubscribe}
             disabled={createCheckout.isPending}
           >
             {createCheckout.isPending ? (
