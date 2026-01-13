@@ -1,19 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
-import { useLocation, useSearch } from "wouter";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 
 export default function SubscriptionSuccess() {
   const [, setLocation] = useLocation();
-  const search = useSearch();
-  const [isActivating, setIsActivating] = useState(true);
-  const [activationError, setActivationError] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
   const utils = trpc.useUtils();
-
-  // URLからセッションIDを取得
-  const sessionId = new URLSearchParams(search).get("session_id");
 
   // サブスクリプション状態を確認
   const { data: subscription, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
@@ -25,43 +20,27 @@ export default function SubscriptionSuccess() {
     refetchOnMount: 'always',
   });
 
-  // セッションIDからサブスクリプションを有効化
-  const activateMutation = trpc.subscription.activateFromSession.useMutation({
-    onSuccess: async (data) => {
-      console.log("Subscription activated successfully:", data);
-      // サブスクリプション状態を再取得
+  useEffect(() => {
+    // ページ表示時にサブスクリプション状態とプロファイルを再取得
+    const checkStatus = async () => {
+      console.log("Checking subscription and profile status after payment...");
+      
+      // 少し待ってからサブスクリプション状態を確認
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // サブスクリプション状態とプロファイルを再取得
       await refetchSubscription();
       await refetchProfile();
-      setIsActivating(false);
-    },
-    onError: (error) => {
-      console.error("Activation error:", error);
-      setActivationError(error.message);
-      setIsActivating(false);
-    },
-  });
-
-  useEffect(() => {
-    // セッションIDがある場合はサブスクリプションを有効化
-    const activateSubscription = async () => {
-      if (sessionId) {
-        console.log("Activating subscription with session ID:", sessionId);
-        activateMutation.mutate({ sessionId });
-      } else {
-        // セッションIDがない場合は既存のサブスクリプション状態を確認
-        console.log("No session ID, checking existing subscription status");
-        await refetchSubscription();
-        await refetchProfile();
-        setIsActivating(false);
-      }
+      
+      setIsChecking(false);
     };
 
-    activateSubscription();
-  }, [sessionId]);
+    checkStatus();
+  }, [refetchSubscription, refetchProfile]);
 
   // サブスクリプションとプロファイルの状態に応じて自動遷移
   useEffect(() => {
-    if (!isActivating && !activationError) {
+    if (!isChecking) {
       if (subscription?.status === "active") {
         // サブスクリプションがアクティブな場合
         if (profile) {
@@ -75,7 +54,7 @@ export default function SubscriptionSuccess() {
         }
       }
     }
-  }, [isActivating, activationError, subscription, profile, setLocation]);
+  }, [isChecking, subscription, profile, setLocation]);
 
   const handleContinue = async () => {
     // キャッシュを無効化してサブスクリプション状態とプロファイルを再取得
@@ -89,55 +68,6 @@ export default function SubscriptionSuccess() {
       setLocation("/register");
     }
   };
-
-  const handleRetry = () => {
-    if (sessionId) {
-      setIsActivating(true);
-      setActivationError(null);
-      activateMutation.mutate({ sessionId });
-    }
-  };
-
-  // エラー状態
-  if (activationError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md text-center">
-          <CardHeader>
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-              <AlertCircle className="h-10 w-10 text-red-600" />
-            </div>
-            <CardTitle className="text-2xl">エラーが発生しました</CardTitle>
-            <CardDescription>
-              {activationError}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              決済は完了していますが、サブスクリプションの有効化に問題が発生しました。
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                className="flex-1"
-                variant="outline"
-                type="button"
-                onClick={handleRetry}
-              >
-                再試行
-              </Button>
-              <Button 
-                className="flex-1"
-                type="button"
-                onClick={handleContinue}
-              >
-                続行
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -156,10 +86,10 @@ export default function SubscriptionSuccess() {
             次に会員情報を登録して、AIアプリをご利用いただけるようになります。
           </p>
           
-          {isActivating ? (
+          {isChecking ? (
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>サブスクリプションを有効化中...</span>
+              <span>登録状態を確認中...</span>
             </div>
           ) : (
             <Button 
