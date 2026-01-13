@@ -219,6 +219,89 @@ export const appRouter = router({
           message: "サブスクリプションが解約されました。",
         };
       }),
+
+    // 決済完了後にセッションIDからサブスクリプションを有効化
+    activateFromSession: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const stripe = getStripe();
+        
+        try {
+          // Stripeからセッション情報を取得
+          const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+          console.log("[Activate] Session retrieved:", session.id);
+          console.log("[Activate] Session status:", session.status);
+          console.log("[Activate] Session payment_status:", session.payment_status);
+          
+          // 決済が完了しているか確認
+          if (session.status !== "complete" || session.payment_status !== "paid") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "決済が完了していません",
+            });
+          }
+
+          // サブスクリプションIDを取得
+          const subscriptionId = typeof session.subscription === "string" 
+            ? session.subscription 
+            : session.subscription?.id;
+
+          if (!subscriptionId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "サブスクリプション情報が見つかりません",
+            });
+          }
+
+          console.log("[Activate] Subscription ID:", subscriptionId);
+
+          // Stripeからサブスクリプション情報を取得
+          const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+          console.log("[Activate] Stripe subscription status:", stripeSubscription.status);
+
+          // ユーザーのサブスクリプションを取得
+          const existingSubscription = await getSubscription(ctx.user.id);
+          
+          if (!existingSubscription) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "サブスクリプションレコードが見つかりません",
+            });
+          }
+
+          // サブスクリプションを有効化
+          const stripeSubAny = stripeSubscription as any;
+          const startedAt = stripeSubAny.start_date * 1000;
+          const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+
+          await updateSubscription(ctx.user.id, {
+            stripeSubscriptionId: subscriptionId,
+            status: "active",
+            startedAt,
+            initialPeriodEndsAt,
+            isInInitialPeriod: true,
+            currentPeriodEnd: stripeSubAny.current_period_end * 1000,
+          });
+
+          console.log("[Activate] Subscription activated successfully for user:", ctx.user.id);
+
+          return {
+            success: true,
+            status: "active",
+          };
+        } catch (error) {
+          console.error("[Activate] Error:", error);
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "サブスクリプションの有効化に失敗しました",
+          });
+        }
+      }),
   }),
 
   // Voice transcription router
