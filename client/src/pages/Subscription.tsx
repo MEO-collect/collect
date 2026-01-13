@@ -19,13 +19,17 @@ const features = [
 export default function Subscription() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
-  const { data: subscription, isLoading: subscriptionLoading } = trpc.subscription.get.useQuery(undefined, {
+  const { data: subscription, isLoading: subscriptionLoading, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
     enabled: isAuthenticated,
+    // ページ表示時に必ず最新データを取得
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
@@ -57,9 +61,25 @@ export default function Subscription() {
   // 既にアクティブなサブスクリプションがある場合はホームへ
   useEffect(() => {
     if (!subscriptionLoading && subscription?.status === "active") {
+      console.log("Active subscription detected, redirecting to /home");
       setLocation("/home");
     }
   }, [subscriptionLoading, subscription, setLocation]);
+
+  // ページがフォーカスされた時にサブスクリプション状態を再取得
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isAuthenticated) {
+        console.log("Page became visible, refetching subscription");
+        refetchSubscription();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isAuthenticated, refetchSubscription]);
 
   if (authLoading || profileLoading || subscriptionLoading) {
     return (

@@ -1,10 +1,44 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { useEffect, useState } from "react";
 
 export default function SubscriptionSuccess() {
   const [, setLocation] = useLocation();
+  const [isChecking, setIsChecking] = useState(true);
+  const utils = trpc.useUtils();
+
+  // サブスクリプション状態を確認
+  const { data: subscription, refetch } = trpc.subscription.get.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
+
+  useEffect(() => {
+    // ページ表示時にサブスクリプション状態を再取得
+    const checkSubscription = async () => {
+      console.log("Checking subscription status after payment...");
+      
+      // 少し待ってからサブスクリプション状態を確認
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // サブスクリプション状態を再取得
+      await refetch();
+      
+      setIsChecking(false);
+    };
+
+    checkSubscription();
+  }, [refetch]);
+
+  const handleGoHome = async () => {
+    // キャッシュを無効化してサブスクリプション状態を再取得
+    await utils.subscription.get.invalidate();
+    
+    // ホームページに遷移
+    setLocation("/home");
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -23,12 +57,21 @@ export default function SubscriptionSuccess() {
             AIアプリをご利用いただけるようになりました。
             ホーム画面からアプリをお選びください。
           </p>
-          <Button 
-            className="w-full"
-            onClick={() => setLocation("/home")}
-          >
-            ホームへ進む
-          </Button>
+          
+          {isChecking ? (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>登録状態を確認中...</span>
+            </div>
+          ) : (
+            <Button 
+              className="w-full"
+              type="button"
+              onClick={handleGoHome}
+            >
+              ホームへ進む
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>
