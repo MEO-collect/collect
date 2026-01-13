@@ -6,7 +6,6 @@ import { Check, CreditCard, Loader2, Shield, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 
 const features = [
   "音声録音・書き起こし・要約アプリ",
@@ -21,14 +20,12 @@ export default function Subscription() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
-  // プロファイルのクエリは無効化（サブスク登録が先なので不要）
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
   const { data: subscription, isLoading: subscriptionLoading, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
     enabled: isAuthenticated,
-    // ページ表示時に必ず最新データを取得
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
@@ -37,7 +34,6 @@ export default function Subscription() {
     onSuccess: (data) => {
       if (data.url) {
         toast.info("決済ページに移動します");
-        // 同じタブで遷移
         window.location.href = data.url;
       }
     },
@@ -52,21 +48,26 @@ export default function Subscription() {
     createCheckout.mutate();
   };
 
+  // 未ログインの場合はランディングページにリダイレクト
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      console.log("Not authenticated, redirecting to landing page");
+      setLocation("/");
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
+
   // 既にアクティブなサブスクリプションがある場合
   useEffect(() => {
-    if (!subscriptionLoading && !profileLoading && subscription?.status === "active") {
-      // サブスクリプションがアクティブな場合
+    if (!authLoading && isAuthenticated && !subscriptionLoading && !profileLoading && subscription?.status === "active") {
       if (!profile) {
-        // プロファイルがない場合は会員登録へ
         console.log("Active subscription but no profile, redirecting to /register");
         setLocation("/register");
       } else {
-        // プロファイルがある場合はホームへ
         console.log("Active subscription and profile exists, redirecting to /home");
         setLocation("/home");
       }
     }
-  }, [subscriptionLoading, profileLoading, subscription, profile, setLocation]);
+  }, [authLoading, isAuthenticated, subscriptionLoading, profileLoading, subscription, profile, setLocation]);
 
   // ページがフォーカスされた時にサブスクリプション状態を再取得
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function Subscription() {
     };
   }, [isAuthenticated, refetchSubscription]);
 
+  // ローディング中
   if (authLoading || subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -91,26 +93,11 @@ export default function Subscription() {
     );
   }
 
+  // 未ログインの場合はローディング表示（リダイレクト中）
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">BtoB AIプラットフォーム</CardTitle>
-            <CardDescription>
-              サービスをご利用いただくにはログインが必要です
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              className="w-full" 
-              type="button"
-              onClick={() => window.location.href = getLoginUrl()}
-            >
-              ログイン
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

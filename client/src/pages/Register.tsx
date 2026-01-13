@@ -8,7 +8,6 @@ import { Building2, Loader2, Mail, User } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 
 export default function Register() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -56,9 +55,17 @@ export default function Register() {
     }
   }, [profile, user]);
 
+  // 未ログインの場合はランディングページにリダイレクト
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      console.log("Not authenticated, redirecting to landing page");
+      setLocation("/");
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
+
   // サブスクリプションがアクティブでない場合はサブスクリプションページへ
   useEffect(() => {
-    if (!authLoading && !subscriptionLoading && isAuthenticated) {
+    if (!authLoading && isAuthenticated && !subscriptionLoading) {
       if (!subscription || subscription.status !== "active") {
         console.log("No active subscription, redirecting to /subscription");
         setLocation("/subscription");
@@ -82,6 +89,7 @@ export default function Register() {
     });
   };
 
+  // ローディング中
   if (authLoading || subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -90,25 +98,11 @@ export default function Register() {
     );
   }
 
+  // 未ログインの場合はローディング表示（リダイレクト中）
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">BtoB AIプラットフォーム</CardTitle>
-            <CardDescription>
-              サービスをご利用いただくにはログインが必要です
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              className="w-full" 
-              onClick={() => window.location.href = getLoginUrl()}
-            >
-              ログイン
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

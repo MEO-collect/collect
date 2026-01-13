@@ -51,6 +51,7 @@ export default function Home() {
   const { loading: authLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
+  // ログイン済みの場合のみクエリを実行
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
@@ -63,27 +64,35 @@ export default function Home() {
   // ログイン済みユーザーの自動リダイレクト
   // フロー: ログイン → サブスク登録 → 会員情報登録 → ホーム
   useEffect(() => {
-    if (!authLoading && !subscriptionLoading && isAuthenticated) {
-      // まずサブスクリプション状態を確認
-      if (!subscription || subscription.status !== "active") {
-        // サブスクリプションがない場合はサブスクリプションページへ
-        console.log("No active subscription, redirecting to /subscription");
-        setLocation("/subscription");
-        return;
-      }
-      
-      // サブスクリプションがアクティブな場合、プロファイルを確認
-      if (!profileLoading) {
-        if (!profile) {
-          // プロファイルがない場合は会員登録ページへ
-          console.log("No profile, redirecting to /register");
-          setLocation("/register");
-        } else {
-          // プロファイルがある場合はホームへ
-          console.log("Profile and subscription exist, redirecting to /home");
-          setLocation("/home");
-        }
-      }
+    // 認証ローディング中は何もしない
+    if (authLoading) return;
+    
+    // 未ログインの場合はランディングページを表示（リダイレクトしない）
+    if (!isAuthenticated) {
+      console.log("Not authenticated, showing landing page");
+      return;
+    }
+    
+    // ログイン済みの場合、サブスクリプションとプロファイルの状態を確認
+    if (subscriptionLoading || profileLoading) return;
+    
+    // まずサブスクリプション状態を確認
+    if (!subscription || subscription.status !== "active") {
+      // サブスクリプションがない場合はサブスクリプションページへ
+      console.log("No active subscription, redirecting to /subscription");
+      setLocation("/subscription");
+      return;
+    }
+    
+    // サブスクリプションがアクティブな場合、プロファイルを確認
+    if (!profile) {
+      // プロファイルがない場合は会員登録ページへ
+      console.log("No profile, redirecting to /register");
+      setLocation("/register");
+    } else {
+      // プロファイルがある場合はホームへ
+      console.log("Profile and subscription exist, redirecting to /home");
+      setLocation("/home");
     }
   }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription, setLocation]);
 
@@ -91,7 +100,8 @@ export default function Home() {
     window.location.href = getLoginUrl();
   };
 
-  if (authLoading || (isAuthenticated && (profileLoading || subscriptionLoading))) {
+  // 認証ローディング中のみローディング表示
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -99,6 +109,16 @@ export default function Home() {
     );
   }
 
+  // ログイン済みでデータ取得中の場合のみローディング表示
+  if (isAuthenticated && (profileLoading || subscriptionLoading)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // 未ログインの場合はランディングページを表示
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
