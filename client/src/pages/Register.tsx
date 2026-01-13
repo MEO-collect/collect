@@ -24,6 +24,7 @@ export default function Register() {
 
   const { data: subscription, isLoading: subscriptionLoading } = trpc.subscription.get.useQuery(undefined, {
     enabled: isAuthenticated,
+    refetchOnMount: 'always',
   });
 
   const utils = trpc.useUtils();
@@ -36,15 +37,8 @@ export default function Register() {
       await utils.profile.get.invalidate();
       await utils.subscription.get.invalidate();
       
-      // サブスクリプション状態を再取得して確認
-      const latestSubscription = await utils.subscription.get.fetch();
-      
-      // プロファイル登録後、サブスクリプション確認へ
-      if (latestSubscription?.status === "active") {
-        setLocation("/home");
-      } else {
-        setLocation("/subscription");
-      }
+      // ホームへ遷移（この時点でサブスクリプションは必ずアクティブ）
+      setLocation("/home");
     },
     onError: (error) => {
       toast.error(error.message || "登録に失敗しました");
@@ -62,14 +56,22 @@ export default function Register() {
     }
   }, [profile, user]);
 
-  // 既にプロファイルとアクティブなサブスクリプションがある場合はホームへ
+  // サブスクリプションがアクティブでない場合はサブスクリプションページへ
   useEffect(() => {
-    if (!authLoading && !profileLoading && !subscriptionLoading) {
-      if (profile && subscription?.status === "active") {
+    if (!authLoading && !subscriptionLoading && isAuthenticated) {
+      if (!subscription || subscription.status !== "active") {
+        console.log("No active subscription, redirecting to /subscription");
+        setLocation("/subscription");
+        return;
+      }
+      
+      // 既にプロファイルとアクティブなサブスクリプションがある場合はホームへ
+      if (!profileLoading && profile) {
+        console.log("Profile and active subscription exist, redirecting to /home");
         setLocation("/home");
       }
     }
-  }, [authLoading, profileLoading, subscriptionLoading, profile, subscription, setLocation]);
+  }, [authLoading, profileLoading, subscriptionLoading, profile, subscription, isAuthenticated, setLocation]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +82,7 @@ export default function Register() {
     });
   };
 
-  if (authLoading || profileLoading || subscriptionLoading) {
+  if (authLoading || subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -107,6 +109,15 @@ export default function Register() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  // サブスクリプションがアクティブでない場合はローディング表示（リダイレクト中）
+  if (!subscription || subscription.status !== "active") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

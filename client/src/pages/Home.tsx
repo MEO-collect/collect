@@ -57,16 +57,32 @@ export default function Home() {
 
   const { data: subscription, isLoading: subscriptionLoading } = trpc.subscription.get.useQuery(undefined, {
     enabled: isAuthenticated,
+    refetchOnMount: 'always',
   });
 
+  // ログイン済みユーザーの自動リダイレクト
+  // フロー: ログイン → サブスク登録 → 会員情報登録 → ホーム
   useEffect(() => {
-    if (!authLoading && !profileLoading && !subscriptionLoading && isAuthenticated) {
-      if (profile && subscription?.status === "active") {
-        setLocation("/home");
-      } else if (profile && !subscription?.status) {
+    if (!authLoading && !subscriptionLoading && isAuthenticated) {
+      // まずサブスクリプション状態を確認
+      if (!subscription || subscription.status !== "active") {
+        // サブスクリプションがない場合はサブスクリプションページへ
+        console.log("No active subscription, redirecting to /subscription");
         setLocation("/subscription");
-      } else if (!profile) {
-        setLocation("/register");
+        return;
+      }
+      
+      // サブスクリプションがアクティブな場合、プロファイルを確認
+      if (!profileLoading) {
+        if (!profile) {
+          // プロファイルがない場合は会員登録ページへ
+          console.log("No profile, redirecting to /register");
+          setLocation("/register");
+        } else {
+          // プロファイルがある場合はホームへ
+          console.log("Profile and subscription exist, redirecting to /home");
+          setLocation("/home");
+        }
       }
     }
   }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription, setLocation]);

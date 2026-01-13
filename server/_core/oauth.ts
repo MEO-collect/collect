@@ -48,21 +48,22 @@ export function registerOAuthRoutes(app: Express) {
       const dbUser = await db.getUserByOpenId(userInfo.openId);
       
       if (dbUser) {
-        // Check if user has a member profile
-        const profile = await db.getMemberProfile(dbUser.id);
-        
-        if (!profile) {
-          // No profile - redirect to registration
-          res.redirect(302, "/register");
-          return;
-        }
-        
-        // Check subscription status
+        // Check subscription status FIRST
         const subscription = await db.getSubscription(dbUser.id);
         
         if (!subscription || subscription.status !== "active") {
-          // No active subscription - redirect to subscription page
+          // No active subscription - redirect to subscription page first
+          // User must subscribe before registering profile
           res.redirect(302, "/subscription");
+          return;
+        }
+        
+        // Has active subscription - check if user has a member profile
+        const profile = await db.getMemberProfile(dbUser.id);
+        
+        if (!profile) {
+          // Has subscription but no profile - redirect to registration
+          res.redirect(302, "/register");
           return;
         }
         
@@ -71,8 +72,8 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      // Fallback - redirect to register if user not found (shouldn't happen)
-      res.redirect(302, "/register");
+      // Fallback - redirect to subscription if user not found (shouldn't happen)
+      res.redirect(302, "/subscription");
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

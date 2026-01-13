@@ -21,6 +21,7 @@ export default function Subscription() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
+  // プロファイルのクエリは無効化（サブスク登録が先なので不要）
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
@@ -51,20 +52,21 @@ export default function Subscription() {
     createCheckout.mutate();
   };
 
-  // プロファイル未登録の場合は登録ページへ
+  // 既にアクティブなサブスクリプションがある場合
   useEffect(() => {
-    if (!authLoading && !profileLoading && isAuthenticated && !profile) {
-      setLocation("/register");
+    if (!subscriptionLoading && !profileLoading && subscription?.status === "active") {
+      // サブスクリプションがアクティブな場合
+      if (!profile) {
+        // プロファイルがない場合は会員登録へ
+        console.log("Active subscription but no profile, redirecting to /register");
+        setLocation("/register");
+      } else {
+        // プロファイルがある場合はホームへ
+        console.log("Active subscription and profile exists, redirecting to /home");
+        setLocation("/home");
+      }
     }
-  }, [authLoading, profileLoading, isAuthenticated, profile, setLocation]);
-
-  // 既にアクティブなサブスクリプションがある場合はホームへ
-  useEffect(() => {
-    if (!subscriptionLoading && subscription?.status === "active") {
-      console.log("Active subscription detected, redirecting to /home");
-      setLocation("/home");
-    }
-  }, [subscriptionLoading, subscription, setLocation]);
+  }, [subscriptionLoading, profileLoading, subscription, profile, setLocation]);
 
   // ページがフォーカスされた時にサブスクリプション状態を再取得
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function Subscription() {
     };
   }, [isAuthenticated, refetchSubscription]);
 
-  if (authLoading || profileLoading || subscriptionLoading) {
+  if (authLoading || subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
