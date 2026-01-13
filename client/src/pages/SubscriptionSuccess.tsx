@@ -11,33 +11,62 @@ export default function SubscriptionSuccess() {
   const utils = trpc.useUtils();
 
   // サブスクリプション状態を確認
-  const { data: subscription, refetch } = trpc.subscription.get.useQuery(undefined, {
+  const { data: subscription, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
+
+  // プロファイル状態を確認
+  const { data: profile, refetch: refetchProfile } = trpc.profile.get.useQuery(undefined, {
     refetchOnMount: 'always',
   });
 
   useEffect(() => {
-    // ページ表示時にサブスクリプション状態を再取得
-    const checkSubscription = async () => {
-      console.log("Checking subscription status after payment...");
+    // ページ表示時にサブスクリプション状態とプロファイルを再取得
+    const checkStatus = async () => {
+      console.log("Checking subscription and profile status after payment...");
       
       // 少し待ってからサブスクリプション状態を確認
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // サブスクリプション状態を再取得
-      await refetch();
+      // サブスクリプション状態とプロファイルを再取得
+      await refetchSubscription();
+      await refetchProfile();
       
       setIsChecking(false);
     };
 
-    checkSubscription();
-  }, [refetch]);
+    checkStatus();
+  }, [refetchSubscription, refetchProfile]);
 
-  const handleGoHome = async () => {
-    // キャッシュを無効化してサブスクリプション状態を再取得
+  // サブスクリプションとプロファイルの状態に応じて自動遷移
+  useEffect(() => {
+    if (!isChecking) {
+      if (subscription?.status === "active") {
+        // サブスクリプションがアクティブな場合
+        if (profile) {
+          // プロファイルがある場合はホームへ
+          console.log("Subscription active and profile exists, redirecting to /home");
+          setLocation("/home");
+        } else {
+          // プロファイルがない場合は会員登録へ
+          console.log("Subscription active but no profile, redirecting to /register");
+          setLocation("/register");
+        }
+      }
+    }
+  }, [isChecking, subscription, profile, setLocation]);
+
+  const handleContinue = async () => {
+    // キャッシュを無効化してサブスクリプション状態とプロファイルを再取得
     await utils.subscription.get.invalidate();
+    await utils.profile.get.invalidate();
     
-    // ホームページに遷移
-    setLocation("/home");
+    // プロファイルがある場合はホームへ、ない場合は会員登録へ
+    if (profile) {
+      setLocation("/home");
+    } else {
+      setLocation("/register");
+    }
   };
 
   return (
@@ -47,15 +76,14 @@ export default function SubscriptionSuccess() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <CheckCircle2 className="h-10 w-10 text-green-600" />
           </div>
-          <CardTitle className="text-2xl">登録完了</CardTitle>
+          <CardTitle className="text-2xl">決済完了</CardTitle>
           <CardDescription>
-            サブスクリプションの登録が完了しました
+            サブスクリプションの決済が完了しました
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            AIアプリをご利用いただけるようになりました。
-            ホーム画面からアプリをお選びください。
+            次に会員情報を登録して、AIアプリをご利用いただけるようになります。
           </p>
           
           {isChecking ? (
@@ -67,9 +95,9 @@ export default function SubscriptionSuccess() {
             <Button 
               className="w-full"
               type="button"
-              onClick={handleGoHome}
+              onClick={handleContinue}
             >
-              ホームへ進む
+              {profile ? "ホームへ進む" : "会員情報を登録する"}
             </Button>
           )}
         </CardContent>

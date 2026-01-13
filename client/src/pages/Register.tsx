@@ -26,11 +26,21 @@ export default function Register() {
     enabled: isAuthenticated,
   });
 
+  const utils = trpc.useUtils();
+
   const upsertProfile = trpc.profile.upsert.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("会員情報を登録しました");
+      
+      // プロファイルとサブスクリプション状態を再取得
+      await utils.profile.get.invalidate();
+      await utils.subscription.get.invalidate();
+      
+      // サブスクリプション状態を再取得して確認
+      const latestSubscription = await utils.subscription.get.fetch();
+      
       // プロファイル登録後、サブスクリプション確認へ
-      if (subscription?.status === "active") {
+      if (latestSubscription?.status === "active") {
         setLocation("/home");
       } else {
         setLocation("/subscription");
