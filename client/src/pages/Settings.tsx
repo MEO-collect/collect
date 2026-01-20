@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ArrowLeft, 
   Building2, 
+  Calendar,
   CreditCard, 
   Loader2, 
   Mail, 
@@ -27,6 +28,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+// 日付をフォーマットする関数
+function formatDate(timestamp: number | null | undefined): string {
+  if (!timestamp) return "未設定";
+  const date = new Date(timestamp);
+  return date.toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 export default function Settings() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -245,6 +257,36 @@ export default function Settings() {
                     <p className="font-medium">
                       {subscription.isInInitialPeriod ? "初回契約期間中" : "通常契約"}
                     </p>
+                  </div>
+                </div>
+
+                {/* 契約日程情報 */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calendar className="h-4 w-4 text-slate-600" />
+                    <span className="font-medium text-slate-700">契約日程</span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-muted-foreground text-xs">契約開始日</Label>
+                      <p className="font-medium">{formatDate(subscription.startedAt)}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-xs">次回更新日</Label>
+                      <p className="font-medium">{formatDate(subscription.currentPeriodEnd)}</p>
+                    </div>
+                    {subscription.isInInitialPeriod && (
+                      <div className="sm:col-span-2">
+                        <Label className="text-muted-foreground text-xs">初回契約期間終了日</Label>
+                        <p className="font-medium">{formatDate(subscription.initialPeriodEndsAt)}</p>
+                      </div>
+                    )}
+                    {subscription.canceledAt && (
+                      <div className="sm:col-span-2">
+                        <Label className="text-muted-foreground text-xs">解約申請日</Label>
+                        <p className="font-medium text-red-600">{formatDate(subscription.canceledAt)}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 

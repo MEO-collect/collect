@@ -137,6 +137,24 @@ describe("subscription router", () => {
     expect(result?.isInInitialPeriod).toBe(true);
   });
 
+  it("should return subscription dates (startedAt, currentPeriodEnd, initialPeriodEndsAt)", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.subscription.get();
+
+    expect(result).toBeDefined();
+    // 契約開始日が存在することを確認
+    expect(result?.startedAt).toBeDefined();
+    expect(typeof result?.startedAt).toBe("number");
+    // 次回更新日が存在することを確認
+    expect(result?.currentPeriodEnd).toBeDefined();
+    expect(typeof result?.currentPeriodEnd).toBe("number");
+    // 初回契約期間終了日が存在することを確認
+    expect(result?.initialPeriodEndsAt).toBeDefined();
+    expect(typeof result?.initialPeriodEndsAt).toBe("number");
+  });
+
   it("should create checkout session for new user", async () => {
     // Mock getSubscription to return null for this test
     const { getSubscription } = await import("./db");
