@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Check, CreditCard, Loader2, Shield, Sparkles } from "lucide-react";
 import { useEffect } from "react";
@@ -16,9 +15,8 @@ const features = [
 ];
 
 export default function Subscription() {
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { loading: authLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const utils = trpc.useUtils();
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -44,36 +42,28 @@ export default function Subscription() {
   });
 
   const handleSubscribe = () => {
-    console.log("Subscribe button clicked");
     createCheckout.mutate();
   };
 
-  // 未ログインの場合はランディングページにリダイレクト
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      console.log("Not authenticated, redirecting to landing page");
       setLocation("/");
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  // 既にアクティブなサブスクリプションがある場合
   useEffect(() => {
     if (!authLoading && isAuthenticated && !subscriptionLoading && !profileLoading && subscription?.status === "active") {
       if (!profile) {
-        console.log("Active subscription but no profile, redirecting to /register");
         setLocation("/register");
       } else {
-        console.log("Active subscription and profile exists, redirecting to /home");
         setLocation("/home");
       }
     }
   }, [authLoading, isAuthenticated, subscriptionLoading, profileLoading, subscription, profile, setLocation]);
 
-  // ページがフォーカスされた時にサブスクリプション状態を再取得
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isAuthenticated) {
-        console.log("Page became visible, refetching subscription");
         refetchSubscription();
       }
     };
@@ -84,44 +74,52 @@ export default function Subscription() {
     };
   }, [isAuthenticated, refetchSubscription]);
 
-  // ローディング中
   if (authLoading || subscriptionLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
-  // 未ログインの場合はローディング表示（リダイレクト中）
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Sparkles className="h-6 w-6 text-primary" />
+    <div className="min-h-screen flex items-center justify-center gradient-mesh p-4 relative overflow-hidden">
+      {/* 装飾用のフローティングオーブ */}
+      <div className="floating-orb w-80 h-80 bg-primary/20 top-[-10%] right-[-10%]" style={{ animationDelay: '0s' }} />
+      <div className="floating-orb w-64 h-64 bg-blue-400/20 bottom-[-5%] left-[-10%]" style={{ animationDelay: '2s' }} />
+      <div className="floating-orb w-48 h-48 bg-purple-400/15 top-[30%] left-[5%]" style={{ animationDelay: '4s' }} />
+
+      <div className="glass-card w-full max-w-lg p-8 relative z-10">
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 backdrop-blur-sm">
+            <Sparkles className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">プレミアムプランに登録</CardTitle>
-          <CardDescription>
+          <h1 className="text-2xl font-bold mb-2">プレミアムプランに登録</h1>
+          <p className="text-muted-foreground">
             5つのAIアプリを無制限にご利用いただけます
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+          </p>
+        </div>
+
+        <div className="space-y-6">
           {/* 価格表示 */}
-          <div className="text-center p-6 bg-muted rounded-lg">
-            <div className="text-4xl font-bold text-foreground">
+          <div className="text-center p-6 rounded-2xl bg-white/40 backdrop-blur-sm border border-white/30">
+            <div className="text-5xl font-bold text-gradient">
               ¥0
-              <span className="text-lg font-normal text-muted-foreground">/月</span>
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            <span className="text-lg text-muted-foreground">/月</span>
+            <p className="text-sm text-muted-foreground mt-3">
               テスト期間中は無料でご利用いただけます
             </p>
           </div>
@@ -129,21 +127,23 @@ export default function Subscription() {
           {/* 機能一覧 */}
           <div className="space-y-3">
             {features.map((feature, index) => (
-              <div key={index} className="flex items-center gap-3">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
-                  <Check className="h-3 w-3 text-primary" />
+              <div key={index} className="flex items-center gap-3 p-3 rounded-xl bg-white/20 backdrop-blur-sm">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
+                  <Check className="h-3.5 w-3.5 text-primary" />
                 </div>
-                <span className="text-sm">{feature}</span>
+                <span className="text-sm font-medium">{feature}</span>
               </div>
             ))}
           </div>
 
           {/* 契約条件 */}
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="p-5 rounded-2xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50">
             <div className="flex items-start gap-3">
-              <Shield className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-amber-800">
-                <p className="font-medium mb-1">ご契約条件</p>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 flex-shrink-0">
+                <Shield className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="text-sm">
+                <p className="font-semibold text-amber-800 mb-2">ご契約条件</p>
                 <ul className="list-disc list-inside space-y-1 text-amber-700">
                   <li>初回1年間は基本的に解約できません</li>
                   <li>初回期間中の解約は解約金が発生します</li>
@@ -155,7 +155,7 @@ export default function Subscription() {
 
           {/* 登録ボタン */}
           <Button 
-            className="w-full"
+            className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
             size="lg"
             type="button"
             onClick={handleSubscribe}
@@ -163,12 +163,12 @@ export default function Subscription() {
           >
             {createCheckout.isPending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 処理中...
               </>
             ) : (
               <>
-                <CreditCard className="mr-2 h-4 w-4" />
+                <CreditCard className="mr-2 h-5 w-5" />
                 サブスクリプションを開始
               </>
             )}
@@ -177,8 +177,8 @@ export default function Subscription() {
           <p className="text-xs text-center text-muted-foreground">
             決済はStripeの安全な決済システムを使用しています
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

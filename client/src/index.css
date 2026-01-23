@@ -44,75 +44,96 @@
 }
 
 :root {
-  /* BtoB向け清潔感のあるブルー系カラー */
-  --primary: oklch(0.45 0.18 250);
+  /* グラスモーフィズム対応のモダンなカラーパレット */
+  --primary: oklch(0.55 0.22 250);
   --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.45 0.18 250);
+  --sidebar-primary: oklch(0.55 0.22 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.65 0.15 250);
-  --chart-2: oklch(0.55 0.17 250);
-  --chart-3: oklch(0.45 0.18 250);
-  --chart-4: oklch(0.35 0.15 250);
-  --chart-5: oklch(0.25 0.12 250);
-  --radius: 0.75rem;
-  --background: oklch(0.98 0.002 250);
-  --foreground: oklch(0.2 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 250);
-  --secondary: oklch(0.95 0.01 250);
-  --secondary-foreground: oklch(0.35 0.02 250);
-  --muted: oklch(0.96 0.005 250);
-  --muted-foreground: oklch(0.5 0.02 250);
-  --accent: oklch(0.94 0.02 250);
-  --accent-foreground: oklch(0.2 0.02 250);
-  --destructive: oklch(0.55 0.22 25);
+  --chart-1: oklch(0.65 0.18 250);
+  --chart-2: oklch(0.55 0.20 250);
+  --chart-3: oklch(0.45 0.22 250);
+  --chart-4: oklch(0.35 0.18 250);
+  --chart-5: oklch(0.25 0.15 250);
+  --radius: 1rem;
+  
+  /* グラスモーフィズム用の背景 - グラデーション対応 */
+  --background: oklch(0.96 0.01 250);
+  --foreground: oklch(0.15 0.02 250);
+  
+  /* すりガラス風カード */
+  --card: oklch(1 0 0 / 0.7);
+  --card-foreground: oklch(0.15 0.02 250);
+  --popover: oklch(1 0 0 / 0.85);
+  --popover-foreground: oklch(0.15 0.02 250);
+  
+  --secondary: oklch(0.95 0.015 250 / 0.8);
+  --secondary-foreground: oklch(0.25 0.02 250);
+  --muted: oklch(0.94 0.01 250 / 0.6);
+  --muted-foreground: oklch(0.45 0.02 250);
+  --accent: oklch(0.92 0.03 250 / 0.7);
+  --accent-foreground: oklch(0.15 0.02 250);
+  --destructive: oklch(0.55 0.25 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.9 0.01 250);
-  --input: oklch(0.9 0.01 250);
-  --ring: oklch(0.45 0.18 250);
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.2 0.02 250);
-  --sidebar-accent: oklch(0.95 0.01 250);
-  --sidebar-accent-foreground: oklch(0.2 0.02 250);
-  --sidebar-border: oklch(0.9 0.01 250);
-  --sidebar-ring: oklch(0.45 0.18 250);
+  
+  /* グラスモーフィズム用のボーダー */
+  --border: oklch(0.85 0.015 250 / 0.5);
+  --input: oklch(0.92 0.01 250 / 0.6);
+  --ring: oklch(0.55 0.22 250);
+  
+  --sidebar: oklch(0.98 0.005 250 / 0.8);
+  --sidebar-foreground: oklch(0.15 0.02 250);
+  --sidebar-accent: oklch(0.94 0.015 250 / 0.7);
+  --sidebar-accent-foreground: oklch(0.15 0.02 250);
+  --sidebar-border: oklch(0.88 0.01 250 / 0.4);
+  --sidebar-ring: oklch(0.55 0.22 250);
+  
+  /* グラスモーフィズム用のカスタム変数 */
+  --glass-bg: oklch(1 0 0 / 0.6);
+  --glass-border: oklch(1 0 0 / 0.3);
+  --glass-shadow: oklch(0.2 0.02 250 / 0.1);
+  --gradient-start: oklch(0.95 0.03 250);
+  --gradient-end: oklch(0.98 0.02 200);
 }
 
 .dark {
-  --primary: oklch(0.6 0.18 250);
+  --primary: oklch(0.65 0.20 250);
   --primary-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.55 0.17 250);
+  --sidebar-primary: oklch(0.60 0.18 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --background: oklch(0.15 0.02 250);
+  --background: oklch(0.12 0.02 250);
   --foreground: oklch(0.92 0.01 250);
-  --card: oklch(0.2 0.02 250);
+  --card: oklch(0.18 0.02 250 / 0.7);
   --card-foreground: oklch(0.92 0.01 250);
-  --popover: oklch(0.2 0.02 250);
+  --popover: oklch(0.18 0.02 250 / 0.85);
   --popover-foreground: oklch(0.92 0.01 250);
-  --secondary: oklch(0.25 0.02 250);
-  --secondary-foreground: oklch(0.8 0.01 250);
-  --muted: oklch(0.28 0.02 250);
-  --muted-foreground: oklch(0.7 0.02 250);
-  --accent: oklch(0.28 0.02 250);
+  --secondary: oklch(0.22 0.02 250 / 0.8);
+  --secondary-foreground: oklch(0.85 0.01 250);
+  --muted: oklch(0.25 0.02 250 / 0.6);
+  --muted-foreground: oklch(0.65 0.02 250);
+  --accent: oklch(0.25 0.03 250 / 0.7);
   --accent-foreground: oklch(0.95 0.01 250);
-  --destructive: oklch(0.65 0.2 25);
+  --destructive: oklch(0.60 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.3 0.02 250);
-  --input: oklch(0.3 0.02 250);
-  --ring: oklch(0.55 0.17 250);
-  --chart-1: oklch(0.65 0.15 250);
-  --chart-2: oklch(0.55 0.17 250);
-  --chart-3: oklch(0.45 0.18 250);
-  --chart-4: oklch(0.35 0.15 250);
-  --chart-5: oklch(0.25 0.12 250);
-  --sidebar: oklch(0.18 0.02 250);
+  --border: oklch(0.35 0.02 250 / 0.5);
+  --input: oklch(0.28 0.02 250 / 0.6);
+  --ring: oklch(0.60 0.18 250);
+  --chart-1: oklch(0.65 0.18 250);
+  --chart-2: oklch(0.55 0.20 250);
+  --chart-3: oklch(0.45 0.22 250);
+  --chart-4: oklch(0.35 0.18 250);
+  --chart-5: oklch(0.25 0.15 250);
+  --sidebar: oklch(0.15 0.02 250 / 0.8);
   --sidebar-foreground: oklch(0.92 0.01 250);
-  --sidebar-accent: oklch(0.25 0.02 250);
+  --sidebar-accent: oklch(0.22 0.02 250 / 0.7);
   --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.3 0.02 250);
-  --sidebar-ring: oklch(0.55 0.17 250);
+  --sidebar-border: oklch(0.32 0.02 250 / 0.4);
+  --sidebar-ring: oklch(0.60 0.18 250);
+  
+  --glass-bg: oklch(0.18 0.02 250 / 0.6);
+  --glass-border: oklch(0.35 0.02 250 / 0.3);
+  --glass-shadow: oklch(0 0 0 / 0.3);
+  --gradient-start: oklch(0.12 0.03 250);
+  --gradient-end: oklch(0.15 0.02 280);
 }
 
 @layer base {
@@ -164,14 +185,123 @@
       max-width: 1280px;
     }
   }
+
+  /* グラスモーフィズム用のユーティリティクラス */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 32px var(--glass-shadow);
+  }
+
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 
+      0 8px 32px var(--glass-shadow),
+      inset 0 1px 0 oklch(1 0 0 / 0.1);
+    border-radius: var(--radius);
+  }
+
+  .glass-header {
+    background: oklch(1 0 0 / 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .glass-button {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    transition: all 0.2s ease;
+  }
+
+  .glass-button:hover {
+    background: oklch(1 0 0 / 0.8);
+    box-shadow: 0 4px 16px var(--glass-shadow);
+  }
+
+  .glass-input {
+    background: oklch(1 0 0 / 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-input:focus {
+    background: oklch(1 0 0 / 0.7);
+    border-color: var(--ring);
+  }
+
+  /* グラデーション背景 */
+  .gradient-bg {
+    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+  }
+
+  .gradient-mesh {
+    background: 
+      radial-gradient(at 40% 20%, oklch(0.85 0.08 250 / 0.4) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, oklch(0.9 0.06 200 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, oklch(0.88 0.07 280 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, oklch(0.92 0.05 220 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, oklch(0.85 0.08 250 / 0.3) 0px, transparent 50%),
+      linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+  }
+
+  /* アニメーション付きグラデーション */
+  @keyframes gradient-shift {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animated-gradient {
+    background: linear-gradient(
+      -45deg,
+      oklch(0.92 0.04 250),
+      oklch(0.95 0.03 220),
+      oklch(0.93 0.05 280),
+      oklch(0.96 0.02 200)
+    );
+    background-size: 400% 400%;
+    animation: gradient-shift 15s ease infinite;
+  }
 }
 
-/* 話者色分け用のカスタムクラス */
-.speaker-color-1 { background-color: oklch(0.9 0.1 250); border-left-color: oklch(0.5 0.2 250); }
-.speaker-color-2 { background-color: oklch(0.9 0.1 150); border-left-color: oklch(0.5 0.2 150); }
-.speaker-color-3 { background-color: oklch(0.9 0.1 50); border-left-color: oklch(0.5 0.2 50); }
-.speaker-color-4 { background-color: oklch(0.9 0.1 350); border-left-color: oklch(0.5 0.2 350); }
-.speaker-color-5 { background-color: oklch(0.9 0.1 200); border-left-color: oklch(0.5 0.2 200); }
+/* 話者色分け用のカスタムクラス - グラスモーフィズム対応 */
+.speaker-color-1 { 
+  background: oklch(0.92 0.08 250 / 0.6); 
+  border-left-color: oklch(0.55 0.22 250);
+  backdrop-filter: blur(8px);
+}
+.speaker-color-2 { 
+  background: oklch(0.92 0.08 150 / 0.6); 
+  border-left-color: oklch(0.55 0.22 150);
+  backdrop-filter: blur(8px);
+}
+.speaker-color-3 { 
+  background: oklch(0.92 0.08 50 / 0.6); 
+  border-left-color: oklch(0.55 0.22 50);
+  backdrop-filter: blur(8px);
+}
+.speaker-color-4 { 
+  background: oklch(0.92 0.08 350 / 0.6); 
+  border-left-color: oklch(0.55 0.22 350);
+  backdrop-filter: blur(8px);
+}
+.speaker-color-5 { 
+  background: oklch(0.92 0.08 200 / 0.6); 
+  border-left-color: oklch(0.55 0.22 200);
+  backdrop-filter: blur(8px);
+}
 
 /* 録音中のパルスアニメーション */
 @keyframes recording-pulse {
@@ -181,4 +311,54 @@
 
 .recording-pulse {
   animation: recording-pulse 1.5s ease-in-out infinite;
+}
+
+/* フローティングオーブ（装飾用） */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+}
+
+.floating-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+  animation: float 8s ease-in-out infinite;
+}
+
+/* スムーズなトランジション */
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ホバーエフェクト */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px var(--glass-shadow);
+}
+
+/* プライマリボタンのグラデーション */
+.btn-gradient {
+  background: linear-gradient(135deg, oklch(0.55 0.22 250) 0%, oklch(0.50 0.25 270) 100%);
+  box-shadow: 0 4px 16px oklch(0.55 0.22 250 / 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(135deg, oklch(0.50 0.24 250) 0%, oklch(0.45 0.27 270) 100%);
+  box-shadow: 0 6px 24px oklch(0.55 0.22 250 / 0.4);
+  transform: translateY(-2px);
+}
+
+/* テキストグラデーション */
+.text-gradient {
+  background: linear-gradient(135deg, oklch(0.55 0.22 250) 0%, oklch(0.50 0.25 270) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

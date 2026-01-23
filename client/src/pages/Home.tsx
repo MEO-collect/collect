@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   ArrowRight, 
   BarChart3, 
@@ -51,7 +50,6 @@ export default function Home() {
   const { loading: authLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
-  // ログイン済みの場合のみクエリを実行
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
@@ -61,37 +59,19 @@ export default function Home() {
     refetchOnMount: 'always',
   });
 
-  // ログイン済みユーザーの自動リダイレクト
-  // フロー: ログイン → サブスク登録 → 会員情報登録 → ホーム
   useEffect(() => {
-    // 認証ローディング中は何もしない
     if (authLoading) return;
-    
-    // 未ログインの場合はランディングページを表示（リダイレクトしない）
-    if (!isAuthenticated) {
-      console.log("Not authenticated, showing landing page");
-      return;
-    }
-    
-    // ログイン済みの場合、サブスクリプションとプロファイルの状態を確認
+    if (!isAuthenticated) return;
     if (subscriptionLoading || profileLoading) return;
     
-    // まずサブスクリプション状態を確認
     if (!subscription || subscription.status !== "active") {
-      // サブスクリプションがない場合はサブスクリプションページへ
-      console.log("No active subscription, redirecting to /subscription");
       setLocation("/subscription");
       return;
     }
     
-    // サブスクリプションがアクティブな場合、プロファイルを確認
     if (!profile) {
-      // プロファイルがない場合は会員登録ページへ
-      console.log("No profile, redirecting to /register");
       setLocation("/register");
     } else {
-      // プロファイルがある場合はホームへ
-      console.log("Profile and subscription exist, redirecting to /home");
       setLocation("/home");
     }
   }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription, setLocation]);
@@ -100,59 +80,82 @@ export default function Home() {
     window.location.href = getLoginUrl();
   };
 
-  // 認証ローディング中のみローディング表示
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
-  // ログイン済みでデータ取得中の場合のみローディング表示
   if (isAuthenticated && (profileLoading || subscriptionLoading)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
-  // 未ログインの場合はランディングページを表示
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <span className="font-semibold">BtoB AIプラットフォーム</span>
+    <div className="min-h-screen gradient-mesh relative overflow-hidden">
+      {/* 装飾用のフローティングオーブ */}
+      <div className="floating-orb w-96 h-96 bg-primary/20 top-[-10%] right-[-5%]" style={{ animationDelay: '0s' }} />
+      <div className="floating-orb w-80 h-80 bg-blue-400/20 bottom-[10%] left-[-10%]" style={{ animationDelay: '2s' }} />
+      <div className="floating-orb w-64 h-64 bg-purple-400/20 top-[40%] right-[10%]" style={{ animationDelay: '4s' }} />
+
+      {/* ヘッダー */}
+      <header className="sticky top-0 z-50 glass-header">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <span className="font-semibold text-lg">BtoB AIプラットフォーム</span>
           </div>
-          <Button onClick={handleLogin} type="button">ログイン</Button>
+          <Button 
+            onClick={handleLogin} 
+            type="button"
+            className="btn-gradient text-white border-0 px-6"
+          >
+            ログイン
+          </Button>
         </div>
       </header>
 
-      <section className="py-16 md:py-24">
-        <div className="container text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
+      {/* ヒーローセクション */}
+      <section className="py-20 md:py-32 relative">
+        <div className="container text-center relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-primary text-sm font-medium mb-8">
             <Sparkles className="h-4 w-4" />
             AIで業務効率化
           </div>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-8 leading-tight">
             音声から議事録・カルテを<br />
-            <span className="text-primary">自動生成</span>
+            <span className="text-gradient">自動生成</span>
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
             会議や面談の音声を録音するだけで、AIが自動で書き起こし、議事録やカルテを生成。業務時間を大幅に削減します。
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" onClick={handleLogin} type="button">
-              無料で始める<ArrowRight className="ml-2 h-4 w-4" />
+            <Button 
+              size="lg" 
+              onClick={handleLogin} 
+              type="button"
+              className="btn-gradient text-white border-0 px-8 py-6 text-lg"
+            >
+              無料で始める
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
             <Button 
               size="lg" 
               variant="outline" 
               type="button"
               onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+              className="glass-button px-8 py-6 text-lg"
             >
               機能を見る
             </Button>
@@ -160,71 +163,99 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="features" className="py-16 bg-muted/50">
+      {/* 機能セクション */}
+      <section id="features" className="py-20 relative">
         <div className="container">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">主な機能</h2>
-            <p className="text-muted-foreground">AIの力で、音声データから価値ある情報を抽出します</p>
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">主な機能</h2>
+            <p className="text-muted-foreground text-lg">AIの力で、音声データから価値ある情報を抽出します</p>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {features.map((feature, index) => (
-              <Card key={index} className="bg-background">
-                <CardHeader>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary mb-4">
-                    {feature.icon}
-                  </div>
-                  <CardTitle className="text-lg">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>{feature.description}</CardDescription>
-                </CardContent>
-              </Card>
+              <div 
+                key={index} 
+                className="glass-card p-6 hover-lift"
+              >
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 backdrop-blur-sm text-primary mb-5">
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-semibold mb-3">{feature.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="py-16">
+      {/* メリットセクション */}
+      <section className="py-20 relative">
         <div className="container">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold mb-6">導入メリット</h2>
-              <ul className="space-y-4">
+              <h2 className="text-3xl md:text-4xl font-bold mb-8">導入メリット</h2>
+              <ul className="space-y-5">
                 {benefits.map((benefit, index) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 flex-shrink-0 mt-0.5">
+                  <li key={index} className="flex items-start gap-4">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 backdrop-blur-sm flex-shrink-0 mt-0.5">
                       <Check className="h-4 w-4 text-primary" />
                     </div>
-                    <span>{benefit}</span>
+                    <span className="text-lg">{benefit}</span>
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="bg-muted rounded-xl p-8">
+            <div className="glass-card p-10">
               <div className="text-center">
-                <div className="text-4xl font-bold text-primary mb-2">¥0</div>
-                <div className="text-muted-foreground mb-6">テスト期間中は無料</div>
-                <Button className="w-full" size="lg" onClick={handleLogin} type="button">今すぐ始める</Button>
-                <p className="text-xs text-muted-foreground mt-4">クレジットカード登録が必要です</p>
+                <div className="text-5xl font-bold text-gradient mb-3">¥0</div>
+                <div className="text-muted-foreground text-lg mb-8">テスト期間中は無料</div>
+                <Button 
+                  className="w-full btn-gradient text-white border-0 py-6 text-lg" 
+                  size="lg" 
+                  onClick={handleLogin} 
+                  type="button"
+                >
+                  今すぐ始める
+                </Button>
+                <p className="text-sm text-muted-foreground mt-5">クレジットカード登録が必要です</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="py-16 bg-primary text-primary-foreground">
-        <div className="container text-center">
-          <h2 className="text-2xl md:text-3xl font-bold mb-4">今すぐ始めましょう</h2>
-          <p className="mb-8 opacity-90">面倒な議事録作成から解放されて、本来の業務に集中しませんか？</p>
-          <Button size="lg" variant="secondary" onClick={handleLogin} type="button">
-            無料で始める<ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+      {/* CTAセクション */}
+      <section className="py-20 relative">
+        <div className="container">
+          <div className="glass-card p-12 md:p-16 text-center relative overflow-hidden">
+            {/* 背景装飾 */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-purple-500/10 pointer-events-none" />
+            <div className="relative z-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-5">今すぐ始めましょう</h2>
+              <p className="text-muted-foreground text-lg mb-10 max-w-xl mx-auto">
+                面倒な議事録作成から解放されて、本来の業務に集中しませんか？
+              </p>
+              <Button 
+                size="lg" 
+                onClick={handleLogin} 
+                type="button"
+                className="btn-gradient text-white border-0 px-10 py-6 text-lg"
+              >
+                無料で始める
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 
-      <footer className="py-8 border-t">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>&copy; 2025 BtoB AIプラットフォーム. All rights reserved.</p>
+      {/* フッター */}
+      <footer className="py-10 relative">
+        <div className="container">
+          <div className="glass-card p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              &copy; 2025 BtoB AIプラットフォーム. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
     </div>

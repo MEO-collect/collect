@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -46,22 +45,22 @@ import { formatDuration } from "@/hooks/useAudioRecorder";
 const statusConfig: Record<ProjectStatus, { label: string; color: string; icon: React.ReactNode }> = {
   created: { 
     label: "新規", 
-    color: "bg-slate-100 text-slate-700",
+    color: "bg-slate-100/80 text-slate-700 backdrop-blur-sm",
     icon: <Clock className="h-3 w-3" />
   },
   recorded: { 
     label: "録音済", 
-    color: "bg-blue-100 text-blue-700",
+    color: "bg-blue-100/80 text-blue-700 backdrop-blur-sm",
     icon: <Mic className="h-3 w-3" />
   },
   transcribed: { 
     label: "書き起こし済", 
-    color: "bg-amber-100 text-amber-700",
+    color: "bg-amber-100/80 text-amber-700 backdrop-blur-sm",
     icon: <FileText className="h-3 w-3" />
   },
   summarized: { 
     label: "完了", 
-    color: "bg-green-100 text-green-700",
+    color: "bg-emerald-100/80 text-emerald-700 backdrop-blur-sm",
     icon: <CheckCircle2 className="h-3 w-3" />
   },
 };
@@ -95,11 +94,7 @@ export default function ProjectList() {
 
   const handleDeleteProject = async () => {
     if (!projectToDelete) return;
-    
-    // Delete audio from IndexedDB
     await deleteAudio(projectToDelete.id);
-    
-    // Delete project from LocalStorage
     deleteProject(projectToDelete.id);
     setProjects(getProjects());
     setShowDeleteDialog(false);
@@ -114,93 +109,103 @@ export default function ProjectList() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center">
-          <Button variant="ghost" size="sm" onClick={() => setLocation("/home")}>
+    <div className="min-h-screen gradient-mesh relative overflow-hidden">
+      {/* 装飾用のフローティングオーブ */}
+      <div className="floating-orb w-72 h-72 bg-primary/15 top-[-5%] right-[-5%]" style={{ animationDelay: '0s' }} />
+      <div className="floating-orb w-56 h-56 bg-blue-400/15 bottom-[10%] left-[-5%]" style={{ animationDelay: '2s' }} />
+
+      {/* ヘッダー */}
+      <header className="sticky top-0 z-50 glass-header">
+        <div className="container flex h-16 items-center">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setLocation("/home")}
+            className="glass-button rounded-xl"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
             戻る
           </Button>
-          <span className="ml-4 font-semibold">音声録音＆書き起こし＆要約</span>
+          <span className="ml-4 font-semibold text-lg">音声録音＆書き起こし＆要約</span>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container py-6">
-        <div className="flex items-center justify-between mb-6">
+      {/* メインコンテンツ */}
+      <main className="container py-8 relative z-10">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold">プロジェクト一覧</h1>
-            <p className="text-muted-foreground text-sm mt-1">
+            <h1 className="text-3xl font-bold">プロジェクト一覧</h1>
+            <p className="text-muted-foreground mt-2">
               音声録音・書き起こしプロジェクトを管理します
             </p>
           </div>
         </div>
 
-        {/* Project Grid */}
+        {/* プロジェクトグリッド */}
         {projects.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <Mic className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">プロジェクトがありません</h3>
-              <p className="text-muted-foreground mb-4">
-                新しいプロジェクトを作成して、音声の録音を始めましょう
-              </p>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                新規プロジェクト
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="glass-card text-center py-16 px-8">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 backdrop-blur-sm mx-auto mb-6">
+              <Mic className="h-8 w-8 text-primary" />
+            </div>
+            <h3 className="text-xl font-semibold mb-3">プロジェクトがありません</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              新しいプロジェクトを作成して、音声の録音を始めましょう
+            </p>
+            <Button 
+              onClick={() => setShowCreateDialog(true)}
+              className="btn-gradient text-white border-0 px-6 py-5 rounded-xl"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              新規プロジェクト
+            </Button>
+          </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => {
               const status = statusConfig[project.status];
               return (
-                <Card 
+                <div 
                   key={project.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]"
+                  className="glass-card p-5 cursor-pointer hover-lift"
                   onClick={() => setLocation(`/app/voice/${project.id}`)}
                 >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-base line-clamp-1">
-                        {project.name}
-                      </CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 -mr-2 -mt-1 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => openDeleteDialog(e, project)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <CardDescription className="text-xs">
-                      {new Date(project.createdAt).toLocaleString("ja-JP")}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
-                        {status.icon}
-                        {status.label}
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold line-clamp-1 flex-1 mr-2">
+                      {project.name}
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 -mr-2 -mt-1 text-muted-foreground hover:text-destructive rounded-lg"
+                      onClick={(e) => openDeleteDialog(e, project)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    {new Date(project.createdAt).toLocaleString("ja-JP")}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${status.color}`}>
+                      {status.icon}
+                      {status.label}
+                    </span>
+                    {project.recordingDuration > 0 && (
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {formatDuration(project.recordingDuration)}
                       </span>
-                      {project.recordingDuration > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatDuration(project.recordingDuration)}
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -208,17 +213,17 @@ export default function ProjectList() {
 
         {/* FAB */}
         <Button
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg"
+          className="fixed bottom-8 right-8 h-16 w-16 rounded-2xl shadow-xl btn-gradient text-white border-0"
           size="icon"
           onClick={() => setShowCreateDialog(true)}
         >
-          <Plus className="h-6 w-6" />
+          <Plus className="h-7 w-7" />
         </Button>
       </main>
 
-      {/* Create Project Dialog */}
+      {/* 新規プロジェクトダイアログ */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
+        <DialogContent className="glass-card border-0">
           <DialogHeader>
             <DialogTitle>新規プロジェクト</DialogTitle>
             <DialogDescription>
@@ -226,13 +231,13 @@ export default function ProjectList() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label htmlFor="projectName">プロジェクト名</Label>
+            <Label htmlFor="projectName" className="text-sm font-medium">プロジェクト名</Label>
             <Input
               id="projectName"
               placeholder="例: 2025年1月定例会議"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              className="mt-2"
+              className="mt-2 glass-input h-12 rounded-xl"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   handleCreateProject();
@@ -241,19 +246,26 @@ export default function ProjectList() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCreateDialog(false)}
+              className="glass-button rounded-xl"
+            >
               キャンセル
             </Button>
-            <Button onClick={handleCreateProject}>
+            <Button 
+              onClick={handleCreateProject}
+              className="btn-gradient text-white border-0 rounded-xl"
+            >
               作成
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* 削除確認ダイアログ */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="glass-card border-0">
           <AlertDialogHeader>
             <AlertDialogTitle>プロジェクトを削除</AlertDialogTitle>
             <AlertDialogDescription>
@@ -262,10 +274,10 @@ export default function ProjectList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogCancel className="glass-button rounded-xl">キャンセル</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteProject}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
             >
               削除
             </AlertDialogAction>

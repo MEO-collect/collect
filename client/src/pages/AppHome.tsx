@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { 
   FileText, 
@@ -29,36 +28,32 @@ interface AppCardProps {
 
 function AppCard({ title, description, icon, isLocked = false, onClick }: AppCardProps) {
   return (
-    <Card 
-      className={`relative overflow-hidden transition-all duration-200 ${
+    <div 
+      className={`relative overflow-hidden glass-card p-6 ${
         isLocked 
-          ? "opacity-60 cursor-not-allowed" 
-          : "hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
+          ? "opacity-70 cursor-not-allowed" 
+          : "hover-lift cursor-pointer"
       }`}
       onClick={isLocked ? undefined : onClick}
     >
       {isLocked && (
-        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
+        <div className="absolute inset-0 bg-background/30 backdrop-blur-[2px] z-10 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            <Lock className="h-6 w-6" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 backdrop-blur-sm">
+              <Lock className="h-5 w-5" />
+            </div>
             <span className="text-xs font-medium">Coming Soon</span>
           </div>
         </div>
       )}
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            {icon}
-          </div>
-          <div>
-            <CardTitle className="text-base">{title}</CardTitle>
-          </div>
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 backdrop-blur-sm">
+          {icon}
         </div>
-      </CardHeader>
-      <CardContent>
-        <CardDescription className="text-sm">{description}</CardDescription>
-      </CardContent>
-    </Card>
+        <h3 className="text-base font-semibold">{title}</h3>
+      </div>
+      <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+    </div>
   );
 }
 
@@ -74,21 +69,18 @@ export default function AppHome() {
     enabled: isAuthenticated,
   });
 
-  // 未認証の場合はログインページへ
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       setLocation("/");
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  // プロファイル未登録の場合は登録ページへ
   useEffect(() => {
     if (!authLoading && !profileLoading && isAuthenticated && !profile) {
       setLocation("/register");
     }
   }, [authLoading, profileLoading, isAuthenticated, profile, setLocation]);
 
-  // サブスクリプションがアクティブでない場合は登録ページへ
   useEffect(() => {
     if (!subscriptionLoading && subscription && subscription.status !== "active") {
       setLocation("/subscription");
@@ -103,31 +95,32 @@ export default function AppHome() {
 
   if (authLoading || profileLoading || subscriptionLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">BtoB AIプラットフォーム</CardTitle>
-            <CardDescription>
-              サービスをご利用いただくにはログインが必要です
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              className="w-full" 
-              onClick={() => window.location.href = getLoginUrl()}
-            >
-              ログイン
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center gradient-mesh p-4">
+        <div className="glass-card w-full max-w-md p-8 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 backdrop-blur-sm mx-auto mb-6">
+            <Sparkles className="h-7 w-7 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold mb-3">BtoB AIプラットフォーム</h1>
+          <p className="text-muted-foreground mb-8">
+            サービスをご利用いただくにはログインが必要です
+          </p>
+          <Button 
+            className="w-full btn-gradient text-white border-0 py-6" 
+            onClick={() => window.location.href = getLoginUrl()}
+          >
+            ログイン
+          </Button>
+        </div>
       </div>
     );
   }
@@ -137,7 +130,7 @@ export default function AppHome() {
       id: "voice-transcription",
       title: "音声録音＆書き起こし＆要約",
       description: "音声を録音し、AIで書き起こし・要約・議事録・カルテを自動生成します",
-      icon: <Mic className="h-5 w-5 text-primary" />,
+      icon: <Mic className="h-6 w-6 text-primary" />,
       isLocked: false,
       path: "/app/voice",
     },
@@ -145,67 +138,83 @@ export default function AppHome() {
       id: "document-analysis",
       title: "ドキュメント分析",
       description: "PDFや文書ファイルをAIで分析し、要約や質問応答を行います",
-      icon: <FileText className="h-5 w-5 text-primary" />,
+      icon: <FileText className="h-6 w-6 text-primary" />,
       isLocked: true,
     },
     {
       id: "chat-assistant",
       title: "AIチャットアシスタント",
       description: "ビジネスに特化したAIチャットボットで業務をサポートします",
-      icon: <MessageSquare className="h-5 w-5 text-primary" />,
+      icon: <MessageSquare className="h-6 w-6 text-primary" />,
       isLocked: true,
     },
     {
       id: "data-analysis",
       title: "データ分析",
       description: "Excelやデータをアップロードして、AIで分析・可視化します",
-      icon: <BarChart3 className="h-5 w-5 text-primary" />,
+      icon: <BarChart3 className="h-6 w-6 text-primary" />,
       isLocked: true,
     },
     {
       id: "image-generation",
       title: "画像生成",
       description: "テキストから高品質な画像をAIで生成します",
-      icon: <Image className="h-5 w-5 text-primary" />,
+      icon: <Image className="h-6 w-6 text-primary" />,
       isLocked: true,
     },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <span className="font-semibold">BtoB AIプラットフォーム</span>
+    <div className="min-h-screen gradient-mesh relative overflow-hidden">
+      {/* 装飾用のフローティングオーブ */}
+      <div className="floating-orb w-80 h-80 bg-primary/15 top-[-5%] right-[-5%]" style={{ animationDelay: '0s' }} />
+      <div className="floating-orb w-64 h-64 bg-blue-400/15 bottom-[5%] left-[-5%]" style={{ animationDelay: '3s' }} />
+
+      {/* ヘッダー */}
+      <header className="sticky top-0 z-50 glass-header">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <span className="font-semibold text-lg">BtoB AIプラットフォーム</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setLocation("/settings")}>
-              <Settings className="h-4 w-4" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setLocation("/settings")}
+              className="glass-button h-10 w-10 rounded-xl"
+            >
+              <Settings className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleLogout}
+              className="glass-button h-10 w-10 rounded-xl"
+            >
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container py-6">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold mb-2">
+      {/* メインコンテンツ */}
+      <main className="container py-8 relative z-10">
+        {/* ウェルカムセクション */}
+        <div className="mb-10">
+          <h1 className="text-3xl font-bold mb-3">
             こんにちは、{profile?.contactName || user?.name || "ユーザー"}さん
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-lg">
             {profile?.companyName && `${profile.companyName} | `}
             利用可能なAIアプリをお選びください
           </p>
         </div>
 
-        {/* App Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* アプリグリッド */}
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {apps.map((app) => (
             <AppCard
               key={app.id}
@@ -218,18 +227,20 @@ export default function AppHome() {
           ))}
         </div>
 
-        {/* Subscription Info */}
+        {/* サブスクリプション情報 */}
         {subscription && (
-          <div className="mt-8 p-4 bg-muted rounded-lg">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="mt-10 glass-card p-5">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">プラン: </span>
                 <span className="font-medium">{subscription.planName}</span>
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">ステータス: </span>
-                <span className={`font-medium ${
-                  subscription.status === "active" ? "text-green-600" : "text-amber-600"
+                <span className={`font-semibold ${
+                  subscription.status === "active" 
+                    ? "text-emerald-600" 
+                    : "text-amber-600"
                 }`}>
                   {subscription.status === "active" ? "有効" : subscription.status}
                 </span>

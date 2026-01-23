@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +30,6 @@ import {
   FileText, 
   Loader2, 
   Mic, 
-  MicOff,
   Pause,
   Play,
   RefreshCw,
@@ -54,7 +52,6 @@ import { saveAudio, getAudio } from "@/lib/indexedDB";
 import { useAudioRecorder, formatDuration } from "@/hooks/useAudioRecorder";
 import { Streamdown } from "streamdown";
 
-// Speaker color mapping
 function getSpeakerColor(speakerName: string): string {
   const colors = [
     "speaker-color-1",
@@ -70,7 +67,6 @@ function getSpeakerColor(speakerName: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-// Parse transcription into speaker segments
 interface TranscriptionSegment {
   speaker: string;
   text: string;
@@ -104,7 +100,6 @@ function parseTranscription(text: string): TranscriptionSegment[] {
   return segments;
 }
 
-// Extract unique speakers from transcription
 function extractSpeakers(text: string): string[] {
   const speakerRegex = /\[([^\]]+)\]:/g;
   const speakers = new Set<string>();
@@ -157,13 +152,11 @@ export default function ProjectDetail() {
     error: recordingError,
   } = useAudioRecorder();
 
-  // tRPC mutations
   const transcribeMutation = trpc.voice.transcribe.useMutation();
   const summarizeMutation = trpc.voice.summarize.useMutation();
   const minutesMutation = trpc.voice.generateMinutes.useMutation();
   const karteMutation = trpc.voice.generateKarte.useMutation();
 
-  // Load project
   useEffect(() => {
     if (projectId) {
       const p = getProject(projectId);
@@ -175,7 +168,6 @@ export default function ProjectDetail() {
     }
   }, [projectId]);
 
-  // Load saved audio
   useEffect(() => {
     if (projectId && project?.status !== "created") {
       getAudio(projectId).then((blob) => {
@@ -186,7 +178,6 @@ export default function ProjectDetail() {
     }
   }, [projectId, project?.status]);
 
-  // Save audio when recording stops
   useEffect(() => {
     if (audioBlob && projectId) {
       saveAudio(projectId, audioBlob).then(() => {
@@ -199,14 +190,12 @@ export default function ProjectDetail() {
     }
   }, [audioBlob, projectId, duration]);
 
-  // Auth check
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       setLocation("/");
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (savedAudioUrl) {
@@ -229,7 +218,6 @@ export default function ProjectDetail() {
       }
       if (!blob) return;
 
-      // Convert to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
         reader.onloadend = () => {
@@ -420,7 +408,6 @@ export default function ProjectDetail() {
     }
   };
 
-  // Computed values
   const currentAudioUrl = audioUrl || savedAudioUrl;
   const speakers = useMemo(() => {
     return project?.transcription ? extractSpeakers(project.transcription) : [];
@@ -433,513 +420,530 @@ export default function ProjectDetail() {
 
   if (authLoading || !project) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between">
+    <div className="min-h-screen gradient-mesh pb-20 relative overflow-hidden">
+      {/* 装飾用のフローティングオーブ */}
+      <div className="floating-orb w-64 h-64 bg-primary/15 top-[-5%] right-[-5%]" style={{ animationDelay: '0s' }} />
+      <div className="floating-orb w-48 h-48 bg-blue-400/15 bottom-[20%] left-[-5%]" style={{ animationDelay: '2s' }} />
+
+      {/* ヘッダー */}
+      <header className="sticky top-0 z-50 glass-header">
+        <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center">
-            <Button variant="ghost" size="sm" onClick={() => setLocation("/app/voice")}>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setLocation("/app/voice")}
+              className="glass-button rounded-xl"
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               戻る
             </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              <Coins className="h-3 w-3 mr-1" />
-              {tokenTotals.input + tokenTotals.output} tokens / ¥{tokenCost}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-xs glass-button px-3 py-1.5 rounded-lg">
+            <Coins className="h-3 w-3 mr-1.5" />
+            {tokenTotals.input + tokenTotals.output} tokens / ¥{tokenCost}
+          </Badge>
         </div>
-        <div className="container pb-3">
-          <h1 className="text-lg font-semibold line-clamp-1">{project.name}</h1>
-          <p className="text-xs text-muted-foreground">
+        <div className="container pb-4">
+          <h1 className="text-xl font-bold line-clamp-1">{project.name}</h1>
+          <p className="text-xs text-muted-foreground mt-1">
             {new Date(project.createdAt).toLocaleString("ja-JP")}
           </p>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container py-4 space-y-4">
-        {/* Recording Section */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Mic className="h-4 w-4" />
-              録音
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recordingError && (
-              <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
-                {recordingError}
-              </div>
-            )}
+      {/* メインコンテンツ */}
+      <main className="container py-6 space-y-5 relative z-10">
+        {/* 録音セクション */}
+        <div className="glass-card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
+              <Mic className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-semibold">録音</h2>
+          </div>
 
-            {isRecording ? (
-              <div className="text-center py-6">
-                <div className="recording-pulse inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-100 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center">
-                    <Mic className="h-6 w-6 text-white" />
-                  </div>
+          {recordingError && (
+            <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-xl text-sm backdrop-blur-sm">
+              {recordingError}
+            </div>
+          )}
+
+          {isRecording ? (
+            <div className="text-center py-8">
+              <div className="recording-pulse inline-flex items-center justify-center w-24 h-24 rounded-full bg-red-100/80 backdrop-blur-sm mb-5">
+                <div className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center shadow-lg">
+                  <Mic className="h-7 w-7 text-white" />
                 </div>
-                <div className="text-4xl font-mono font-bold text-red-600 mb-4">
-                  {formatDuration(duration)}
+              </div>
+              <div className="text-5xl font-mono font-bold text-red-600 mb-6">
+                {formatDuration(duration)}
+              </div>
+              <div className="flex justify-center gap-3">
+                {isPaused ? (
+                  <Button onClick={resumeRecording} className="glass-button rounded-xl">
+                    <Play className="h-4 w-4 mr-2" />
+                    再開
+                  </Button>
+                ) : (
+                  <Button onClick={pauseRecording} className="glass-button rounded-xl">
+                    <Pause className="h-4 w-4 mr-2" />
+                    一時停止
+                  </Button>
+                )}
+                <Button onClick={stopRecording} variant="destructive" className="rounded-xl">
+                  <Square className="h-4 w-4 mr-2" />
+                  停止
+                </Button>
+              </div>
+            </div>
+          ) : currentAudioUrl ? (
+            <div className="space-y-4">
+              <audio 
+                ref={audioRef} 
+                src={currentAudioUrl} 
+                controls 
+                className="w-full rounded-xl"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  録音時間: {formatDuration(project.recordingDuration)}
+                </span>
+                <Button variant="outline" size="sm" onClick={handleReRecord} className="glass-button rounded-xl">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  録音し直す
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Button onClick={startRecording} size="lg" className="btn-gradient text-white border-0 px-8 py-6 rounded-xl">
+                <Mic className="h-5 w-5 mr-2" />
+                録音を開始
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* 書き起こしセクション */}
+        {currentAudioUrl && (
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 backdrop-blur-sm">
+                  <FileText className="h-5 w-5 text-primary" />
                 </div>
-                <div className="flex justify-center gap-3">
-                  {isPaused ? (
-                    <Button onClick={resumeRecording} variant="outline">
-                      <Play className="h-4 w-4 mr-2" />
-                      再開
-                    </Button>
-                  ) : (
-                    <Button onClick={pauseRecording} variant="outline">
-                      <Pause className="h-4 w-4 mr-2" />
-                      一時停止
-                    </Button>
-                  )}
-                  <Button onClick={stopRecording} variant="destructive">
-                    <Square className="h-4 w-4 mr-2" />
-                    停止
+                <h2 className="font-semibold">書き起こし</h2>
+              </div>
+              {project.transcription && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className="glass-button rounded-lg"
+                  >
+                    {isEditMode ? (
+                      <>
+                        <Eye className="h-4 w-4 mr-1" />
+                        閲覧
+                      </>
+                    ) : (
+                      <>
+                        <Edit3 className="h-4 w-4 mr-1" />
+                        編集
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const renames: Record<string, string> = {};
+                      speakers.forEach(s => { renames[s] = ""; });
+                      setSpeakerRenames(renames);
+                      setShowSpeakerRenameDialog(true);
+                    }}
+                    className="glass-button rounded-lg"
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    話者名変更
                   </Button>
                 </div>
-              </div>
-            ) : currentAudioUrl ? (
+              )}
+            </div>
+
+            {!project.transcription ? (
               <div className="space-y-4">
-                <audio 
-                  ref={audioRef} 
-                  src={currentAudioUrl} 
-                  controls 
-                  className="w-full"
+                <div className="flex items-center gap-4">
+                  <Label className="text-sm font-medium">話者数</Label>
+                  <Select value={speakerCount} onValueChange={setSpeakerCount}>
+                    <SelectTrigger className="w-32 glass-input rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">自動</SelectItem>
+                      <SelectItem value="1">1人</SelectItem>
+                      <SelectItem value="2">2人</SelectItem>
+                      <SelectItem value="3">3人</SelectItem>
+                      <SelectItem value="4">4人</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button 
+                  onClick={handleTranscribe}
+                  disabled={transcribeMutation.isPending}
+                  className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
+                >
+                  {transcribeMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      書き起こし中...
+                    </>
+                  ) : (
+                    "書き起こしを開始"
+                  )}
+                </Button>
+              </div>
+            ) : isEditMode ? (
+              <div className="space-y-4">
+                <Textarea
+                  value={editedTranscription}
+                  onChange={(e) => setEditedTranscription(e.target.value)}
+                  className="min-h-[300px] font-mono text-sm glass-input rounded-xl"
                 />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    録音時間: {formatDuration(project.recordingDuration)}
-                  </span>
-                  <Button variant="outline" size="sm" onClick={handleReRecord}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    録音し直す
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => {
+                    setEditedTranscription(project.transcription || "");
+                    setIsEditMode(false);
+                  }} className="glass-button rounded-xl">
+                    キャンセル
+                  </Button>
+                  <Button onClick={handleSaveTranscription} className="btn-gradient text-white border-0 rounded-xl">
+                    <Check className="h-4 w-4 mr-2" />
+                    保存
                   </Button>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-6">
-                <Button onClick={startRecording} size="lg">
-                  <Mic className="h-5 w-5 mr-2" />
-                  録音を開始
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Transcription Section */}
-        {currentAudioUrl && (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  書き起こし
-                </CardTitle>
-                {project.transcription && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsEditMode(!isEditMode)}
+              <div className="space-y-4">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {transcriptionSegments.map((segment, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-xl border-l-4 ${getSpeakerColor(segment.speaker)}`}
                     >
-                      {isEditMode ? (
-                        <>
-                          <Eye className="h-4 w-4 mr-1" />
-                          閲覧
-                        </>
-                      ) : (
-                        <>
-                          <Edit3 className="h-4 w-4 mr-1" />
-                          編集
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const renames: Record<string, string> = {};
-                        speakers.forEach(s => { renames[s] = ""; });
-                        setSpeakerRenames(renames);
-                        setShowSpeakerRenameDialog(true);
-                      }}
-                    >
-                      <Users className="h-4 w-4 mr-1" />
-                      話者名変更
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!project.transcription ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Label>話者数</Label>
-                    <Select value={speakerCount} onValueChange={setSpeakerCount}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">自動</SelectItem>
-                        <SelectItem value="1">1人</SelectItem>
-                        <SelectItem value="2">2人</SelectItem>
-                        <SelectItem value="3">3人</SelectItem>
-                        <SelectItem value="4">4人</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button 
-                    onClick={handleTranscribe}
-                    disabled={transcribeMutation.isPending}
-                    className="w-full"
+                      <div className="font-semibold text-sm mb-2">[{segment.speaker}]</div>
+                      <div className="text-sm whitespace-pre-wrap leading-relaxed">{segment.text}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopyToClipboard(project.transcription!)}
+                    className="glass-button rounded-xl"
                   >
-                    {transcribeMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        書き起こし中...
-                      </>
-                    ) : (
-                      "書き起こしを開始"
-                    )}
+                    <Clipboard className="h-4 w-4 mr-2" />
+                    コピー
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownloadWord(project.transcription!, `${project.name}_書き起こし`)}
+                    className="glass-button rounded-xl"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Word
                   </Button>
                 </div>
-              ) : isEditMode ? (
-                <div className="space-y-4">
-                  <Textarea
-                    value={editedTranscription}
-                    onChange={(e) => setEditedTranscription(e.target.value)}
-                    className="min-h-[300px] font-mono text-sm"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => {
-                      setEditedTranscription(project.transcription || "");
-                      setIsEditMode(false);
-                    }}>
-                      キャンセル
-                    </Button>
-                    <Button onClick={handleSaveTranscription}>
-                      <Check className="h-4 w-4 mr-2" />
-                      保存
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {transcriptionSegments.map((segment, index) => (
-                      <div
-                        key={index}
-                        className={`p-3 rounded-lg border-l-4 ${getSpeakerColor(segment.speaker)}`}
-                      >
-                        <div className="font-medium text-sm mb-1">[{segment.speaker}]</div>
-                        <div className="text-sm whitespace-pre-wrap">{segment.text}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCopyToClipboard(project.transcription!)}
-                    >
-                      <Clipboard className="h-4 w-4 mr-2" />
-                      コピー
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownloadWord(project.transcription!, `${project.name}_書き起こし`)}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Word
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </div>
         )}
 
-        {/* Summary/Minutes/Karte Tabs */}
+        {/* 要約/議事録/カルテ タブ */}
         {project.transcription && (
-          <Card>
-            <CardContent className="pt-6">
-              <Tabs defaultValue="summary">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="summary">要約</TabsTrigger>
-                  <TabsTrigger value="minutes">議事録</TabsTrigger>
-                  <TabsTrigger value="karte">カルテ</TabsTrigger>
-                </TabsList>
+          <div className="glass-card p-6">
+            <Tabs defaultValue="summary">
+              <TabsList className="grid w-full grid-cols-3 bg-white/30 backdrop-blur-sm rounded-xl p-1">
+                <TabsTrigger value="summary" className="rounded-lg data-[state=active]:bg-white/70">要約</TabsTrigger>
+                <TabsTrigger value="minutes" className="rounded-lg data-[state=active]:bg-white/70">議事録</TabsTrigger>
+                <TabsTrigger value="karte" className="rounded-lg data-[state=active]:bg-white/70">カルテ</TabsTrigger>
+              </TabsList>
 
-                {/* Summary Tab */}
-                <TabsContent value="summary" className="mt-4">
-                  {!project.summary ? (
+              {/* 要約タブ */}
+              <TabsContent value="summary" className="mt-5">
+                {!project.summary ? (
+                  <Button 
+                    onClick={handleSummarize}
+                    disabled={summarizeMutation.isPending}
+                    className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
+                  >
+                    {summarizeMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        要約中...
+                      </>
+                    ) : (
+                      "要約を生成"
+                    )}
+                  </Button>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                      <Streamdown>{project.summary}</Streamdown>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCopyToClipboard(project.summary!)}
+                        className="glass-button rounded-xl"
+                      >
+                        <Clipboard className="h-4 w-4 mr-2" />
+                        コピー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadWord(project.summary!, `${project.name}_要約`)}
+                        className="glass-button rounded-xl"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Word
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* 議事録タブ */}
+              <TabsContent value="minutes" className="mt-5 space-y-4">
+                {!project.minutes ? (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-sm font-medium">テンプレート</Label>
+                        <Select value={minutesTemplate} onValueChange={(v) => setMinutesTemplate(v as "business" | "medical")}>
+                          <SelectTrigger className="mt-2 glass-input rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="business">ビジネス会議</SelectItem>
+                            <SelectItem value="medical">医療カンファレンス</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">会議名</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={minutesMetadata.meetingName}
+                          onChange={(e) => setMinutesMetadata(prev => ({ ...prev, meetingName: e.target.value }))}
+                          placeholder="例: 定例ミーティング"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">日時</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={minutesMetadata.date}
+                          onChange={(e) => setMinutesMetadata(prev => ({ ...prev, date: e.target.value }))}
+                          placeholder="例: 2025年1月12日 10:00"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">参加者</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={minutesMetadata.participants}
+                          onChange={(e) => setMinutesMetadata(prev => ({ ...prev, participants: e.target.value }))}
+                          placeholder="例: 田中、佐藤、鈴木"
+                        />
+                      </div>
+                    </div>
+                    {minutesTemplate === "medical" && (
+                      <div className="p-4 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50 text-sm text-amber-800">
+                        <strong>注意:</strong> 医療カンファレンス用テンプレートでは、AIによる情報の捏造を防ぐため、
+                        書き起こしテキストに明示的に記載されている情報のみが使用されます。
+                      </div>
+                    )}
                     <Button 
-                      onClick={handleSummarize}
-                      disabled={summarizeMutation.isPending}
-                      className="w-full"
+                      onClick={handleGenerateMinutes}
+                      disabled={minutesMutation.isPending}
+                      className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
                     >
-                      {summarizeMutation.isPending ? (
+                      {minutesMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          要約中...
+                          生成中...
                         </>
                       ) : (
-                        "要約を生成"
+                        "議事録を生成"
                       )}
                     </Button>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="prose prose-sm max-w-none">
-                        <Streamdown>{project.summary}</Streamdown>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                      <Streamdown>{project.minutes}</Streamdown>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCopyToClipboard(project.minutes!)}
+                        className="glass-button rounded-xl"
+                      >
+                        <Clipboard className="h-4 w-4 mr-2" />
+                        コピー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadWord(project.minutes!, `${project.name}_議事録`)}
+                        className="glass-button rounded-xl"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Word
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const updated = updateProject(projectId!, { minutes: null });
+                          if (updated) setProject(updated);
+                        }}
+                        className="glass-button rounded-xl"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        再生成
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* カルテタブ */}
+              <TabsContent value="karte" className="mt-5 space-y-4">
+                {!project.karte ? (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-sm font-medium">患者ID</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={kartePatientInfo.patientId}
+                          onChange={(e) => setKartePatientInfo(prev => ({ ...prev, patientId: e.target.value }))}
+                          placeholder="例: P12345"
+                        />
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyToClipboard(project.summary!)}
-                        >
-                          <Clipboard className="h-4 w-4 mr-2" />
-                          コピー
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadWord(project.summary!, `${project.name}_要約`)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Word
-                        </Button>
+                      <div>
+                        <Label className="text-sm font-medium">患者氏名</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={kartePatientInfo.patientName}
+                          onChange={(e) => setKartePatientInfo(prev => ({ ...prev, patientName: e.target.value }))}
+                          placeholder="例: 山田太郎"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">年齢</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={kartePatientInfo.age}
+                          onChange={(e) => setKartePatientInfo(prev => ({ ...prev, age: e.target.value }))}
+                          placeholder="例: 45歳"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">性別</Label>
+                        <Input
+                          className="mt-2 glass-input rounded-xl"
+                          value={kartePatientInfo.gender}
+                          onChange={(e) => setKartePatientInfo(prev => ({ ...prev, gender: e.target.value }))}
+                          placeholder="例: 男性"
+                        />
                       </div>
                     </div>
-                  )}
-                </TabsContent>
-
-                {/* Minutes Tab */}
-                <TabsContent value="minutes" className="mt-4 space-y-4">
-                  {!project.minutes ? (
-                    <>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label>テンプレート</Label>
-                          <Select value={minutesTemplate} onValueChange={(v) => setMinutesTemplate(v as "business" | "medical")}>
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="business">ビジネス会議</SelectItem>
-                              <SelectItem value="medical">医療カンファレンス</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>会議名</Label>
-                          <Input
-                            className="mt-1"
-                            value={minutesMetadata.meetingName}
-                            onChange={(e) => setMinutesMetadata(prev => ({ ...prev, meetingName: e.target.value }))}
-                            placeholder="例: 定例ミーティング"
-                          />
-                        </div>
-                        <div>
-                          <Label>日時</Label>
-                          <Input
-                            className="mt-1"
-                            value={minutesMetadata.date}
-                            onChange={(e) => setMinutesMetadata(prev => ({ ...prev, date: e.target.value }))}
-                            placeholder="例: 2025年1月12日 10:00"
-                          />
-                        </div>
-                        <div>
-                          <Label>参加者</Label>
-                          <Input
-                            className="mt-1"
-                            value={minutesMetadata.participants}
-                            onChange={(e) => setMinutesMetadata(prev => ({ ...prev, participants: e.target.value }))}
-                            placeholder="例: 田中、佐藤、鈴木"
-                          />
-                        </div>
-                      </div>
-                      {minutesTemplate === "medical" && (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                          <strong>注意:</strong> 医療カンファレンス用テンプレートでは、AIによる情報の捏造を防ぐため、
-                          書き起こしテキストに明示的に記載されている情報のみが使用されます。
-                        </div>
+                    <div className="p-4 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50 text-sm text-amber-800">
+                      <strong>注意:</strong> このカルテはAIによる自動生成です。
+                      内容の正確性については必ず医師が確認してください。
+                    </div>
+                    <Button 
+                      onClick={handleGenerateKarte}
+                      disabled={karteMutation.isPending}
+                      className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
+                    >
+                      {karteMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          生成中...
+                        </>
+                      ) : (
+                        "カルテを生成（SOAP形式）"
                       )}
-                      <Button 
-                        onClick={handleGenerateMinutes}
-                        disabled={minutesMutation.isPending}
-                        className="w-full"
-                      >
-                        {minutesMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            生成中...
-                          </>
-                        ) : (
-                          "議事録を生成"
-                        )}
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="prose prose-sm max-w-none">
-                        <Streamdown>{project.minutes}</Streamdown>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyToClipboard(project.minutes!)}
-                        >
-                          <Clipboard className="h-4 w-4 mr-2" />
-                          コピー
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadWord(project.minutes!, `${project.name}_議事録`)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Word
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const updated = updateProject(projectId!, { minutes: null });
-                            if (updated) setProject(updated);
-                          }}
-                        >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          再生成
-                        </Button>
-                      </div>
+                    </Button>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                      <Streamdown>{project.karte}</Streamdown>
                     </div>
-                  )}
-                </TabsContent>
-
-                {/* Karte Tab */}
-                <TabsContent value="karte" className="mt-4 space-y-4">
-                  {!project.karte ? (
-                    <>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label>患者ID</Label>
-                          <Input
-                            className="mt-1"
-                            value={kartePatientInfo.patientId}
-                            onChange={(e) => setKartePatientInfo(prev => ({ ...prev, patientId: e.target.value }))}
-                            placeholder="例: P12345"
-                          />
-                        </div>
-                        <div>
-                          <Label>患者氏名</Label>
-                          <Input
-                            className="mt-1"
-                            value={kartePatientInfo.patientName}
-                            onChange={(e) => setKartePatientInfo(prev => ({ ...prev, patientName: e.target.value }))}
-                            placeholder="例: 山田太郎"
-                          />
-                        </div>
-                        <div>
-                          <Label>年齢</Label>
-                          <Input
-                            className="mt-1"
-                            value={kartePatientInfo.age}
-                            onChange={(e) => setKartePatientInfo(prev => ({ ...prev, age: e.target.value }))}
-                            placeholder="例: 45歳"
-                          />
-                        </div>
-                        <div>
-                          <Label>性別</Label>
-                          <Input
-                            className="mt-1"
-                            value={kartePatientInfo.gender}
-                            onChange={(e) => setKartePatientInfo(prev => ({ ...prev, gender: e.target.value }))}
-                            placeholder="例: 男性"
-                          />
-                        </div>
-                      </div>
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                        <strong>注意:</strong> このカルテはAIによる自動生成です。
-                        内容の正確性については必ず医師が確認してください。
-                      </div>
-                      <Button 
-                        onClick={handleGenerateKarte}
-                        disabled={karteMutation.isPending}
-                        className="w-full"
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCopyToClipboard(project.karte!)}
+                        className="glass-button rounded-xl"
                       >
-                        {karteMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            生成中...
-                          </>
-                        ) : (
-                          "カルテを生成（SOAP形式）"
-                        )}
+                        <Clipboard className="h-4 w-4 mr-2" />
+                        コピー
                       </Button>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="prose prose-sm max-w-none">
-                        <Streamdown>{project.karte}</Streamdown>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyToClipboard(project.karte!)}
-                        >
-                          <Clipboard className="h-4 w-4 mr-2" />
-                          コピー
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadWord(project.karte!, `${project.name}_カルテ`)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Word
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const updated = updateProject(projectId!, { karte: null });
-                            if (updated) setProject(updated);
-                          }}
-                        >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          再生成
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadWord(project.karte!, `${project.name}_カルテ`)}
+                        className="glass-button rounded-xl"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Word
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const updated = updateProject(projectId!, { karte: null });
+                          if (updated) setProject(updated);
+                        }}
+                        className="glass-button rounded-xl"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        再生成
+                      </Button>
                     </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
         )}
       </main>
 
-      {/* Speaker Rename Dialog */}
+      {/* 話者名変更ダイアログ */}
       <Dialog open={showSpeakerRenameDialog} onOpenChange={setShowSpeakerRenameDialog}>
-        <DialogContent>
+        <DialogContent className="glass-card border-0">
           <DialogHeader>
             <DialogTitle>話者名の一括変更</DialogTitle>
             <DialogDescription>
@@ -949,7 +953,7 @@ export default function ProjectDetail() {
           <div className="space-y-4 py-4">
             {speakers.map((speaker) => (
               <div key={speaker} className="flex items-center gap-4">
-                <Label className="w-24 flex-shrink-0">[{speaker}]</Label>
+                <Label className="w-24 flex-shrink-0 font-medium">[{speaker}]</Label>
                 <span className="text-muted-foreground">→</span>
                 <Input
                   value={speakerRenames[speaker] || ""}
@@ -958,15 +962,16 @@ export default function ProjectDetail() {
                     [speaker]: e.target.value,
                   }))}
                   placeholder={`新しい名前（例: 田中）`}
+                  className="glass-input rounded-xl"
                 />
               </div>
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSpeakerRenameDialog(false)}>
+            <Button variant="outline" onClick={() => setShowSpeakerRenameDialog(false)} className="glass-button rounded-xl">
               キャンセル
             </Button>
-            <Button onClick={handleRenameSpeakers}>
+            <Button onClick={handleRenameSpeakers} className="btn-gradient text-white border-0 rounded-xl">
               変更を適用
             </Button>
           </DialogFooter>
