@@ -67,6 +67,35 @@ function getSpeakerColor(speakerName: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
+function getSpeakerIconColor(speakerName: string): string {
+  const colors = [
+    "speaker-icon-1",
+    "speaker-icon-2",
+    "speaker-icon-3",
+    "speaker-icon-4",
+    "speaker-icon-5",
+  ];
+  let hash = 0;
+  for (let i = 0; i < speakerName.length; i++) {
+    hash = speakerName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function getSpeakerNumber(speakerName: string): number {
+  // 話者名から番号を抽出（例: "話者1" -> 1, "Speaker 2" -> 2）
+  const match = speakerName.match(/(\d+)/);
+  if (match) {
+    return parseInt(match[1]);
+  }
+  // 番号がない場合はハッシュで決定
+  let hash = 0;
+  for (let i = 0; i < speakerName.length; i++) {
+    hash = speakerName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return (Math.abs(hash) % 5) + 1;
+}
+
 interface TranscriptionSegment {
   speaker: string;
   text: string;
@@ -642,8 +671,13 @@ export default function ProjectDetail() {
                       key={index}
                       className={`p-4 rounded-xl border-l-4 ${getSpeakerColor(segment.speaker)}`}
                     >
-                      <div className="font-semibold text-sm mb-2">[{segment.speaker}]</div>
-                      <div className="text-sm whitespace-pre-wrap leading-relaxed">{segment.text}</div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-bold ${getSpeakerIconColor(segment.speaker)}`}>
+                          {getSpeakerNumber(segment.speaker)}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{segment.speaker}</span>
+                      </div>
+                      <div className="text-sm whitespace-pre-wrap leading-relaxed pl-9">{segment.text}</div>
                     </div>
                   ))}
                 </div>

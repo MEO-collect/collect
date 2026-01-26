@@ -303,6 +303,23 @@
   backdrop-filter: blur(8px);
 }
 
+/* 話者アイコン用のカラー */
+.speaker-icon-1 { 
+  background: linear-gradient(135deg, oklch(0.55 0.22 250) 0%, oklch(0.50 0.25 270) 100%);
+}
+.speaker-icon-2 { 
+  background: linear-gradient(135deg, oklch(0.55 0.22 150) 0%, oklch(0.50 0.25 170) 100%);
+}
+.speaker-icon-3 { 
+  background: linear-gradient(135deg, oklch(0.55 0.22 50) 0%, oklch(0.50 0.25 70) 100%);
+}
+.speaker-icon-4 { 
+  background: linear-gradient(135deg, oklch(0.55 0.22 350) 0%, oklch(0.50 0.25 10) 100%);
+}
+.speaker-icon-5 { 
+  background: linear-gradient(135deg, oklch(0.55 0.22 200) 0%, oklch(0.50 0.25 220) 100%);
+}
+
 /* 録音中のパルスアニメーション */
 @keyframes recording-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
