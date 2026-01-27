@@ -152,7 +152,7 @@ export default function ProjectDetail() {
   const [speakerCount, setSpeakerCount] = useState<string>("auto");
   const [showSpeakerRenameDialog, setShowSpeakerRenameDialog] = useState(false);
   const [speakerRenames, setSpeakerRenames] = useState<Record<string, string>>({});
-  const [minutesTemplate, setMinutesTemplate] = useState<"business" | "medical">("business");
+  const [minutesTemplate, setMinutesTemplate] = useState<"business" | "medical" | "weekly">("business");
   const [minutesMetadata, setMinutesMetadata] = useState({
     meetingName: "",
     date: "",
@@ -675,7 +675,6 @@ export default function ProjectDetail() {
                         <div className={`flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-bold ${getSpeakerIconColor(segment.speaker)}`}>
                           {getSpeakerNumber(segment.speaker)}
                         </div>
-                        <span className="text-xs text-muted-foreground">{segment.speaker}</span>
                       </div>
                       <div className="text-sm whitespace-pre-wrap leading-relaxed pl-9">{segment.text}</div>
                     </div>
@@ -769,13 +768,14 @@ export default function ProjectDetail() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <Label className="text-sm font-medium">テンプレート</Label>
-                        <Select value={minutesTemplate} onValueChange={(v) => setMinutesTemplate(v as "business" | "medical")}>
+                        <Select value={minutesTemplate} onValueChange={(v) => setMinutesTemplate(v as "business" | "medical" | "weekly")}>
                           <SelectTrigger className="mt-2 glass-input rounded-xl">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="business">ビジネス会議</SelectItem>
                             <SelectItem value="medical">医療カンファレンス</SelectItem>
+                            <SelectItem value="weekly">週間報告</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

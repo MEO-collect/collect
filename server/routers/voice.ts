@@ -126,7 +126,7 @@ export const voiceRouter = router({
   generateMinutes: protectedProcedure
     .input(z.object({
       transcription: z.string(),
-      template: z.enum(["business", "medical"]),
+      template: z.enum(["business", "medical", "weekly"]),
       metadata: z.object({
         meetingName: z.string().optional(),
         date: z.string().optional(),
@@ -139,7 +139,48 @@ export const voiceRouter = router({
 
       let systemPrompt = "";
 
-      if (template === "business") {
+      if (template === "weekly") {
+        systemPrompt = `あなたは優秀なビジネスアナリストです。以下の書き起こしテキストから、週間報告を作成してください。
+
+出力形式：
+# 週間報告
+
+## 基本情報
+- 報告者: ${metadata?.participants || "（書き起こしから推測）"}
+- 報告期間: ${metadata?.date || "（書き起こしから推測）"}
+
+## 1. 成果と目標進捗
+### 今週の成果
+（今週達成したこと、完了したタスクを箇条書きで）
+
+### 目標進捗状況
+（設定した目標に対する進捗状況を記載）
+
+## 2. 振り返り・課題
+### うまくいったこと
+（成功した点、良かった点）
+
+### 課題・改善点
+（直面した問題、改善が必要な点）
+
+### 学び・気づき
+（今週得られた学びや気づき）
+
+## 3. 来週の目標・計画
+### 目標
+（来週達成したい目標）
+
+### 計画・タスク
+| タスク | 優先度 | 予定日 |
+|--------|--------|--------|
+| - | - | - |
+
+### 必要なサポート・リソース
+（目標達成に必要な支援があれば）
+
+## 備考
+（その他の補足事項）`;
+      } else if (template === "business") {
         systemPrompt = `あなたは優秀な秘書です。以下の書き起こしテキストから、ビジネス会議の議事録を作成してください。
 
 出力形式：
