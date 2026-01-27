@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Home, Loader2, UserPlus } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
@@ -70,38 +69,54 @@ export default function SubscriptionSuccess() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <CheckCircle2 className="h-10 w-10 text-green-600" />
-          </div>
-          <CardTitle className="text-2xl">決済完了</CardTitle>
-          <CardDescription>
-            サブスクリプションの決済が完了しました
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <div className="min-h-screen flex items-center justify-center gradient-mesh p-4 relative overflow-hidden">
+      {/* 装飾用のフローティングオーブ */}
+      <div className="floating-orb w-72 h-72 bg-green-400/20 top-[-5%] right-[-10%]" style={{ animationDelay: '0s' }} />
+      <div className="floating-orb w-56 h-56 bg-primary/20 bottom-[-5%] left-[-5%]" style={{ animationDelay: '2s' }} />
+      <div className="floating-orb w-40 h-40 bg-emerald-400/15 top-[40%] left-[10%]" style={{ animationDelay: '4s' }} />
+
+      <div className="glass-card w-full max-w-md p-8 text-center relative z-10">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100/80 backdrop-blur-sm">
+          <CheckCircle2 className="h-12 w-12 text-green-600" />
+        </div>
+        <h1 className="text-2xl font-bold mb-2">決済完了</h1>
+        <p className="text-muted-foreground mb-6">
+          サブスクリプションの決済が完了しました
+        </p>
+        
+        <div className="p-5 rounded-2xl bg-white/40 backdrop-blur-sm border border-white/30 mb-6">
           <p className="text-sm text-muted-foreground">
-            次に会員情報を登録して、AIアプリをご利用いただけるようになります。
+            {profile 
+              ? "AIアプリをご利用いただけます。" 
+              : "次に会員情報を登録して、AIアプリをご利用いただけるようになります。"}
           </p>
-          
-          {isChecking ? (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>登録状態を確認中...</span>
-            </div>
-          ) : (
-            <Button 
-              className="w-full"
-              type="button"
-              onClick={handleContinue}
-            >
-              {profile ? "ホームへ進む" : "会員情報を登録する"}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+        
+        {isChecking ? (
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span>登録状態を確認中...</span>
+          </div>
+        ) : (
+          <Button 
+            className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
+            type="button"
+            onClick={handleContinue}
+          >
+            {profile ? (
+              <>
+                <Home className="mr-2 h-5 w-5" />
+                ホームへ進む
+              </>
+            ) : (
+              <>
+                <UserPlus className="mr-2 h-5 w-5" />
+                会員情報を登録する
+              </>
+            )}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
