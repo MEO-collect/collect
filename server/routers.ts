@@ -144,10 +144,17 @@ export const appRouter = router({
 
     cancel: protectedProcedure.mutation(async ({ ctx }) => {
       const subscription = await getSubscription(ctx.user.id);
-      if (!subscription || !subscription.stripeSubscriptionId) {
+      if (!subscription) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "サブスクリプションが見つかりません",
+        });
+      }
+      
+      if (!subscription.stripeSubscriptionId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "サブスクリプション情報がまだ反映されていません。決済完了後、数分お待ちいただき再度お試しください。",
         });
       }
 
@@ -198,10 +205,17 @@ export const appRouter = router({
         }
 
         const subscription = await getSubscription(ctx.user.id);
-        if (!subscription || !subscription.stripeSubscriptionId) {
+        if (!subscription) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "サブスクリプションが見つかりません",
+          });
+        }
+        
+        if (!subscription.stripeSubscriptionId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "サブスクリプション情報がまだ反映されていません。決済完了後、数分お待ちいただき再度お試しください。",
           });
         }
 

@@ -79,7 +79,11 @@ export default function Settings() {
       }
     },
     onError: (error) => {
-      toast.error(error.message || "解約に失敗しました");
+      if (error.message?.includes("サブスクリプションが見つかりません")) {
+        toast.error("サブスクリプション情報がまだ反映されていません。しばらくお待ちいただき、再度お試しください。");
+      } else {
+        toast.error(error.message || "解約に失敗しました");
+      }
     },
   });
 
@@ -324,10 +328,15 @@ export default function Settings() {
 
               <div className="pt-4 border-t border-white/20">
                 <Button 
+                  type="button"
                   variant="destructive" 
-                  onClick={handleCancelSubscription}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCancelSubscription();
+                  }}
                   disabled={cancelSubscription.isPending || subscription.status !== "active"}
-                  className="rounded-xl"
+                  className="rounded-xl h-12 px-6"
                 >
                   {cancelSubscription.isPending ? (
                     <>
@@ -338,6 +347,11 @@ export default function Settings() {
                     "サブスクリプションを解約"
                   )}
                 </Button>
+                {subscription.status !== "active" && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    サブスクリプションがアクティブでないため、解約できません。
+                  </p>
+                )}
               </div>
             </div>
           ) : (
