@@ -1,9 +1,9 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { Check, CreditCard, Loader2, Shield, Sparkles } from "lucide-react";
-import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { ArrowRight, Check, CreditCard, Loader2, Shield, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 
 const features = [
@@ -17,6 +17,16 @@ const features = [
 export default function Subscription() {
   const { loading: authLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const [skipRedirect, setSkipRedirect] = useState(false);
+
+  // URLパラメータでforce=trueがある場合はリダイレクトをスキップ
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get('force') === 'true') {
+      setSkipRedirect(true);
+    }
+  }, [searchString]);
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -52,6 +62,7 @@ export default function Subscription() {
   }, [authLoading, isAuthenticated, setLocation]);
 
   useEffect(() => {
+    if (skipRedirect) return; // force=trueの場合はリダイレクトしない
     if (!authLoading && isAuthenticated && !subscriptionLoading && !profileLoading && subscription?.status === "active") {
       if (!profile) {
         setLocation("/register");
@@ -59,7 +70,7 @@ export default function Subscription() {
         setLocation("/home");
       }
     }
-  }, [authLoading, isAuthenticated, subscriptionLoading, profileLoading, subscription, profile, setLocation]);
+  }, [authLoading, isAuthenticated, subscriptionLoading, profileLoading, subscription, profile, setLocation, skipRedirect]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -177,6 +188,21 @@ export default function Subscription() {
           <p className="text-xs text-center text-muted-foreground">
             決済はStripeの安全な決済システムを使用しています
           </p>
+
+          {/* 登録済みユーザー向けリンク */}
+          <div className="pt-4 border-t border-white/30">
+            <p className="text-sm text-center text-muted-foreground mb-3">
+              既にプレミアムプランに登録済みの方
+            </p>
+            <Button
+              variant="outline"
+              className="w-full glass-button h-12 rounded-xl"
+              onClick={() => setLocation("/home")}
+            >
+              <ArrowRight className="mr-2 h-4 w-4" />
+              AIツール使用画面へ移動
+            </Button>
+          </div>
         </div>
       </div>
     </div>
