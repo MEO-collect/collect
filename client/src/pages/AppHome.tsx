@@ -81,8 +81,11 @@ export default function AppHome() {
     }
   }, [authLoading, profileLoading, isAuthenticated, profile, setLocation]);
 
+  // サブスクリプションがない場合のみリダイレクト（ステータスが「active」以外でも、サブスクリプションが存在すれば表示を許可）
+  // Webhookの処理タイミングによるリダイレクトループを防止
   useEffect(() => {
-    if (!subscriptionLoading && subscription && subscription.status !== "active") {
+    // サブスクリプションが全く存在しない場合のみリダイレクト
+    if (!subscriptionLoading && !subscription) {
       setLocation("/subscription");
     }
   }, [subscriptionLoading, subscription, setLocation]);

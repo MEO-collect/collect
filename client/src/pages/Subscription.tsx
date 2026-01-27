@@ -52,6 +52,12 @@ export default function Subscription() {
   });
 
   const handleSubscribe = () => {
+    // 二重払い防止：既にサブスクリプションが存在する場合はStripeに移行しない
+    if (subscription) {
+      toast.info("既にサブスクリプションに登録済みです。AIツール画面に移動します。");
+      setLocation("/home");
+      return;
+    }
     createCheckout.mutate();
   };
 
@@ -165,25 +171,38 @@ export default function Subscription() {
           </div>
 
           {/* 登録ボタン */}
-          <Button 
-            className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
-            size="lg"
-            type="button"
-            onClick={handleSubscribe}
-            disabled={createCheckout.isPending}
-          >
-            {createCheckout.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                処理中...
-              </>
-            ) : (
-              <>
-                <CreditCard className="mr-2 h-5 w-5" />
-                サブスクリプションを開始
-              </>
-            )}
-          </Button>
+          {subscription ? (
+            // 既にサブスクリプションがある場合は登録済み表示
+            <div className="p-5 rounded-2xl bg-green-50/80 backdrop-blur-sm border border-green-200/50 text-center">
+              <div className="flex items-center justify-center gap-2 text-green-700 mb-2">
+                <Check className="h-5 w-5" />
+                <span className="font-semibold">登録済み</span>
+              </div>
+              <p className="text-sm text-green-600">
+                既にサブスクリプションに登録されています
+              </p>
+            </div>
+          ) : (
+            <Button 
+              className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
+              size="lg"
+              type="button"
+              onClick={handleSubscribe}
+              disabled={createCheckout.isPending}
+            >
+              {createCheckout.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  処理中...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  サブスクリプションを開始
+                </>
+              )}
+            </Button>
+          )}
 
           <p className="text-xs text-center text-muted-foreground">
             決済はStripeの安全な決済システムを使用しています
@@ -197,7 +216,15 @@ export default function Subscription() {
             <Button
               variant="outline"
               className="w-full glass-button h-12 rounded-xl"
-              onClick={() => setLocation("/home")}
+              type="button"
+              onClick={() => {
+                // プロフィールがない場合は登録画面へ、ある場合はホームへ
+                if (!profile) {
+                  setLocation("/register");
+                } else {
+                  setLocation("/home");
+                }
+              }}
             >
               <ArrowRight className="mr-2 h-4 w-4" />
               AIツール使用画面へ移動
