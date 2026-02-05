@@ -13,8 +13,8 @@ import {
   BarChart3,
   Image
 } from "lucide-react";
-import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
 
@@ -60,6 +60,16 @@ function AppCard({ title, description, icon, isLocked = false, onClick }: AppCar
 export default function AppHome() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const [skipSubscriptionCheck, setSkipSubscriptionCheck] = useState(false);
+
+  // URLパラメータでskip=trueがある場合はサブスクリプションチェックをスキップ
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get('skip') === 'true') {
+      setSkipSubscriptionCheck(true);
+    }
+  }, [searchString]);
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -83,12 +93,14 @@ export default function AppHome() {
 
   // サブスクリプションがない場合のみリダイレクト（ステータスが「active」以外でも、サブスクリプションが存在すれば表示を許可）
   // Webhookの処理タイミングによるリダイレクトループを防止
+  // skip=trueパラメータがある場合はリダイレクトしない
   useEffect(() => {
+    if (skipSubscriptionCheck) return;
     // サブスクリプションが全く存在しない場合のみリダイレクト
     if (!subscriptionLoading && !subscription) {
       window.location.href = "/subscription";
     }
-  }, [subscriptionLoading, subscription]);
+  }, [subscriptionLoading, subscription, skipSubscriptionCheck]);
 
   const handleLogout = async () => {
     await logout();

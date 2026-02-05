@@ -219,10 +219,11 @@ export default function Subscription() {
               type="button"
               onClick={() => {
                 // プロファイルがない場合は登録画面へ、ある場合はホームへ
+                // skip=trueパラメータを追加してサブスクリプションチェックをスキップ
                 if (!profile) {
                   window.location.href = "/register";
                 } else {
-                  window.location.href = "/home";
+                  window.location.href = "/home?skip=true";
                 }
               }}
             >
