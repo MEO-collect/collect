@@ -221,9 +221,9 @@ export default function ProjectDetail() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      setLocation("/");
+      window.location.href = "/";
     }
-  }, [authLoading, isAuthenticated, setLocation]);
+  }, [authLoading, isAuthenticated]);
 
   useEffect(() => {
     return () => {
@@ -470,7 +470,7 @@ export default function ProjectDetail() {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => setLocation("/app/voice")}
+              onClick={() => { window.location.href = "/app/voice"; }}
               className="glass-button rounded-xl"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />

@@ -3,11 +3,12 @@ import { CheckCircle2, Home, Loader2, UserPlus } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
+// utilsは使用しないので削除
 
 export default function SubscriptionSuccess() {
   const [, setLocation] = useLocation();
   const [isChecking, setIsChecking] = useState(true);
-  const utils = trpc.useUtils();
+
 
   // サブスクリプション状態を確認
   const { data: subscription, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
@@ -55,16 +56,12 @@ export default function SubscriptionSuccess() {
     }
   }, [isChecking, subscription, profile, setLocation]);
 
-  const handleContinue = async () => {
-    // キャッシュを無効化してサブスクリプション状態とプロファイルを再取得
-    await utils.subscription.get.invalidate();
-    await utils.profile.get.invalidate();
-    
+  const handleContinue = () => {
     // プロファイルがある場合はホームへ、ない場合は会員登録へ
     if (profile) {
-      setLocation("/home");
+      window.location.href = "/home";
     } else {
-      setLocation("/register");
+      window.location.href = "/register";
     }
   };
 

@@ -65,16 +65,16 @@ export default function Home() {
     if (subscriptionLoading || profileLoading) return;
     
     if (!subscription || subscription.status !== "active") {
-      setLocation("/subscription");
+      window.location.href = "/subscription";
       return;
     }
     
     if (!profile) {
-      setLocation("/register");
+      window.location.href = "/register";
     } else {
-      setLocation("/home");
+      window.location.href = "/home";
     }
-  }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription, setLocation]);
+  }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription]);
 
   const handleLogin = () => {
     window.location.href = getLoginUrl();

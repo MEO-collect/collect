@@ -32,7 +32,7 @@ export default function Register() {
       toast.success("会員情報を登録しました");
       await utils.profile.get.invalidate();
       await utils.subscription.get.invalidate();
-      setLocation("/home");
+      window.location.href = "/home";
     },
     onError: (error) => {
       toast.error(error.message || "登録に失敗しました");
@@ -51,22 +51,22 @@ export default function Register() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      setLocation("/");
+      window.location.href = "/";
     }
-  }, [authLoading, isAuthenticated, setLocation]);
+  }, [authLoading, isAuthenticated]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && !subscriptionLoading) {
       if (!subscription || subscription.status !== "active") {
-        setLocation("/subscription");
+        window.location.href = "/subscription";
         return;
       }
       
       if (!profileLoading && profile) {
-        setLocation("/home");
+        window.location.href = "/home";
       }
     }
-  }, [authLoading, profileLoading, subscriptionLoading, profile, subscription, isAuthenticated, setLocation]);
+  }, [authLoading, profileLoading, subscriptionLoading, profile, subscription, isAuthenticated]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

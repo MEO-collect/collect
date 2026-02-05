@@ -30,7 +30,8 @@ export default function SubscriptionCancel() {
         <div className="flex flex-col gap-3">
           <Button 
             className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
-            onClick={() => setLocation("/subscription")}
+            type="button"
+            onClick={() => { window.location.href = "/subscription"; }}
           >
             <RefreshCw className="mr-2 h-5 w-5" />
             もう一度試す
@@ -38,7 +39,8 @@ export default function SubscriptionCancel() {
           <Button 
             variant="outline"
             className="w-full glass-button h-12 rounded-xl"
-            onClick={() => setLocation("/home")}
+            type="button"
+            onClick={() => { window.location.href = "/home"; }}
           >
             <Home className="mr-2 h-4 w-4" />
             ホームへ戻る

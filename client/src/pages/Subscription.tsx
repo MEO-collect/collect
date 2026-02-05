@@ -218,11 +218,11 @@ export default function Subscription() {
               className="w-full glass-button h-12 rounded-xl"
               type="button"
               onClick={() => {
-                // プロフィールがない場合は登録画面へ、ある場合はホームへ
+                // プロファイルがない場合は登録画面へ、ある場合はホームへ
                 if (!profile) {
-                  setLocation("/register");
+                  window.location.href = "/register";
                 } else {
-                  setLocation("/home");
+                  window.location.href = "/home";
                 }
               }}
             >

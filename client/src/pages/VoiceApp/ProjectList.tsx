@@ -80,16 +80,16 @@ export default function ProjectList() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      setLocation("/");
+      window.location.href = "/";
     }
-  }, [authLoading, isAuthenticated, setLocation]);
+  }, [authLoading, isAuthenticated]);
 
   const handleCreateProject = () => {
     const project = createProject(newProjectName);
     setProjects(getProjects());
     setShowCreateDialog(false);
     setNewProjectName("");
-    setLocation(`/app/voice/${project.id}`);
+    window.location.href = `/app/voice/${project.id}`;
   };
 
   const handleDeleteProject = async () => {
@@ -129,7 +129,7 @@ export default function ProjectList() {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => setLocation("/home")}
+            onClick={() => { window.location.href = "/home"; }}
             className="glass-button rounded-xl"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -176,7 +176,7 @@ export default function ProjectList() {
                 <div 
                   key={project.id}
                   className="glass-card p-5 cursor-pointer hover-lift"
-                  onClick={() => setLocation(`/app/voice/${project.id}`)}
+                  onClick={() => { window.location.href = `/app/voice/${project.id}`; }}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="font-semibold line-clamp-1 flex-1 mr-2">

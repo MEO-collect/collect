@@ -135,7 +135,7 @@ export default function Settings() {
   }
 
   if (!isAuthenticated) {
-    setLocation("/");
+    window.location.href = "/";
     return null;
   }
 
@@ -151,7 +151,8 @@ export default function Settings() {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => setLocation("/home")}
+            type="button"
+            onClick={() => { window.location.href = "/home"; }}
             className="glass-button rounded-xl"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />

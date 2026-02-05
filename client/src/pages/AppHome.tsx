@@ -71,29 +71,29 @@ export default function AppHome() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      setLocation("/");
+      window.location.href = "/";
     }
-  }, [authLoading, isAuthenticated, setLocation]);
+  }, [authLoading, isAuthenticated]);
 
   useEffect(() => {
     if (!authLoading && !profileLoading && isAuthenticated && !profile) {
-      setLocation("/register");
+      window.location.href = "/register";
     }
-  }, [authLoading, profileLoading, isAuthenticated, profile, setLocation]);
+  }, [authLoading, profileLoading, isAuthenticated, profile]);
 
   // サブスクリプションがない場合のみリダイレクト（ステータスが「active」以外でも、サブスクリプションが存在すれば表示を許可）
   // Webhookの処理タイミングによるリダイレクトループを防止
   useEffect(() => {
     // サブスクリプションが全く存在しない場合のみリダイレクト
     if (!subscriptionLoading && !subscription) {
-      setLocation("/subscription");
+      window.location.href = "/subscription";
     }
-  }, [subscriptionLoading, subscription, setLocation]);
+  }, [subscriptionLoading, subscription]);
 
   const handleLogout = async () => {
     await logout();
     toast.success("ログアウトしました");
-    setLocation("/");
+    window.location.href = "/";
   };
 
   if (authLoading || profileLoading || subscriptionLoading) {
@@ -186,7 +186,8 @@ export default function AppHome() {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => setLocation("/settings")}
+              type="button"
+              onClick={() => { window.location.href = "/settings"; }}
               className="glass-button h-10 w-10 rounded-xl"
             >
               <Settings className="h-5 w-5" />
@@ -225,7 +226,7 @@ export default function AppHome() {
               description={app.description}
               icon={app.icon}
               isLocked={app.isLocked}
-              onClick={app.path ? () => setLocation(app.path) : undefined}
+              onClick={app.path ? () => { window.location.href = app.path; } : undefined}
             />
           ))}
         </div>
