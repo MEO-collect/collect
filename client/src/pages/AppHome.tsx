@@ -13,7 +13,7 @@ import {
   BarChart3,
   Image
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
@@ -61,15 +61,11 @@ export default function AppHome() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const [, setLocation] = useLocation();
   const searchString = useSearch();
-  const [skipSubscriptionCheck, setSkipSubscriptionCheck] = useState(false);
-
+  
   // URLパラメータでskip=trueがある場合はサブスクリプションチェックをスキップ
-  useEffect(() => {
-    const params = new URLSearchParams(searchString);
-    if (params.get('skip') === 'true') {
-      setSkipSubscriptionCheck(true);
-    }
-  }, [searchString]);
+  // 初期化時に直接URLパラメータをチェック（useEffectより前に実行される）
+  const skipSubscriptionCheck = typeof window !== 'undefined' && 
+    new URLSearchParams(window.location.search).get('skip') === 'true';
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
