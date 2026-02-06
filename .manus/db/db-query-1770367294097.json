@@ -1,0 +1,65 @@
+{
+  "query": "SELECT * FROM users ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT * FROM users ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "openId": "TNPCFRJwVopatDcrLS8gXt",
+      "name": "AI コレクト",
+      "email": "ms.ai.collect@gmail.com",
+      "loginMethod": "google",
+      "role": "admin",
+      "createdAt": "2026-01-12 09:19:27",
+      "updatedAt": "2026-02-06 08:40:30",
+      "lastSignedIn": "2026-02-06 08:40:30"
+    },
+    {
+      "id": "270107",
+      "openId": "HSWfXZGnJnnue2VJpmNEJx",
+      "name": "テスト コレクト",
+      "email": "meo.collect.test@gmail.com",
+      "loginMethod": "google",
+      "role": "user",
+      "createdAt": "2026-01-13 01:17:38",
+      "updatedAt": "2026-02-06 05:49:16",
+      "lastSignedIn": "2026-02-06 05:49:16"
+    },
+    {
+      "id": "1290014",
+      "openId": "VeUkhHZYdoeq5eiUjKMwxV",
+      "name": "masiro masiro",
+      "email": "masiro612@gmail.com",
+      "loginMethod": "google",
+      "role": "user",
+      "createdAt": "2026-01-26 01:43:33",
+      "updatedAt": "2026-02-06 08:36:51",
+      "lastSignedIn": "2026-02-06 08:36:52"
+    },
+    {
+      "id": "1710001",
+      "openId": "7jeu7tLm8pvzNyMMavxn2G",
+      "name": "tashiro",
+      "email": "tashiro@media-seed.info",
+      "loginMethod": "email",
+      "role": "user",
+      "createdAt": "2026-01-27 09:08:52",
+      "updatedAt": "2026-01-28 04:35:30",
+      "lastSignedIn": "2026-01-28 04:35:30"
+    },
+    {
+      "id": "1740017",
+      "openId": "VD8LHqyRt4VRMoctZrsn3T",
+      "name": "メディアシード 株式会社",
+      "email": "meo.collect@gmail.com",
+      "loginMethod": "google",
+      "role": "user",
+      "createdAt": "2026-01-28 02:28:16",
+      "updatedAt": "2026-02-06 08:19:43",
+      "lastSignedIn": "2026-02-06 08:19:44"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\temail\tloginMethod\trole\tcreatedAt\tupdatedAt\tlastSignedIn\n1\tTNPCFRJwVopatDcrLS8gXt\tAI コレクト\tms.ai.collect@gmail.com\tgoogle\tadmin\t2026-01-12 09:19:27\t2026-02-06 08:40:30\t2026-02-06 08:40:30\n270107\tHSWfXZGnJnnue2VJpmNEJx\tテスト コレクト\tmeo.collect.test@gmail.com\tgoogle\tuser\t2026-01-13 01:17:38\t2026-02-06 05:49:16\t2026-02-06 05:49:16\n1290014\tVeUkhHZYdoeq5eiUjKMwxV\tmasiro masiro\tmasiro612@gmail.com\tgoogle\tuser\t2026-01-26 01:43:33\t2026-02-06 08:36:51\t2026-02-06 08:36:52\n1710001\t7jeu7tLm8pvzNyMMavxn2G\ttashiro\ttashiro@media-seed.info\temail\tuser\t2026-01-27 09:08:52\t2026-01-28 04:35:30\t2026-01-28 04:35:30\n1740017\tVD8LHqyRt4VRMoctZrsn3T\tメディアシード 株式会社\tmeo.collect@gmail.com\tgoogle\tuser\t2026-01-28 02:28:16\t2026-02-06 08:19:43\t2026-02-06 08:19:44\n",
+  "stderr": "",
+  "execution_time_ms": 1557
+}

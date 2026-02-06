@@ -1,0 +1,65 @@
+{
+  "query": "SELECT u.id, u.openId, u.name, u.email, s.id as sub_id, s.userId as sub_user_id, s.stripeCustomerId, s.stripeSubscriptionId, s.status as sub_status FROM users u LEFT JOIN subscriptions s ON u.id = s.userId ORDER BY u.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT u.id, u.openId, u.name, u.email, s.id as sub_id, s.userId as sub_user_id, s.stripeCustomerId, s.stripeSubscriptionId, s.status as sub_status FROM users u LEFT JOIN subscriptions s ON u.id = s.userId ORDER BY u.id;",
+  "rows": [
+    {
+      "id": "1",
+      "openId": "TNPCFRJwVopatDcrLS8gXt",
+      "name": "AI コレクト",
+      "email": "ms.ai.collect@gmail.com",
+      "sub_id": "150001",
+      "sub_user_id": "1",
+      "stripeCustomerId": "cus_TvFIhapVNEyZxD",
+      "stripeSubscriptionId": "NULL",
+      "sub_status": "incomplete"
+    },
+    {
+      "id": "270107",
+      "openId": "HSWfXZGnJnnue2VJpmNEJx",
+      "name": "テスト コレクト",
+      "email": "meo.collect.test@gmail.com",
+      "sub_id": "NULL",
+      "sub_user_id": "NULL",
+      "stripeCustomerId": "NULL",
+      "stripeSubscriptionId": "NULL",
+      "sub_status": "NULL"
+    },
+    {
+      "id": "1290014",
+      "openId": "VeUkhHZYdoeq5eiUjKMwxV",
+      "name": "masiro masiro",
+      "email": "masiro612@gmail.com",
+      "sub_id": "180001",
+      "sub_user_id": "1290014",
+      "stripeCustomerId": "cus_Tvbj0n2cskHCBV",
+      "stripeSubscriptionId": "NULL",
+      "sub_status": "incomplete"
+    },
+    {
+      "id": "1710001",
+      "openId": "7jeu7tLm8pvzNyMMavxn2G",
+      "name": "tashiro",
+      "email": "tashiro@media-seed.info",
+      "sub_id": "NULL",
+      "sub_user_id": "NULL",
+      "stripeCustomerId": "NULL",
+      "stripeSubscriptionId": "NULL",
+      "sub_status": "NULL"
+    },
+    {
+      "id": "1740017",
+      "openId": "VD8LHqyRt4VRMoctZrsn3T",
+      "name": "メディアシード 株式会社",
+      "email": "meo.collect@gmail.com",
+      "sub_id": "NULL",
+      "sub_user_id": "NULL",
+      "stripeCustomerId": "NULL",
+      "stripeSubscriptionId": "NULL",
+      "sub_status": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\temail\tsub_id\tsub_user_id\tstripeCustomerId\tstripeSubscriptionId\tsub_status\n1\tTNPCFRJwVopatDcrLS8gXt\tAI コレクト\tms.ai.collect@gmail.com\t150001\t1\tcus_TvFIhapVNEyZxD\tNULL\tincomplete\n270107\tHSWfXZGnJnnue2VJpmNEJx\tテスト コレクト\tmeo.collect.test@gmail.com\tNULL\tNULL\tNULL\tNULL\tNULL\n1290014\tVeUkhHZYdoeq5eiUjKMwxV\tmasiro masiro\tmasiro612@gmail.com\t180001\t1290014\tcus_Tvbj0n2cskHCBV\tNULL\tincomplete\n1710001\t7jeu7tLm8pvzNyMMavxn2G\ttashiro\ttashiro@media-seed.info\tNULL\tNULL\tNULL\tNULL\tNULL\n1740017\tVD8LHqyRt4VRMoctZrsn3T\tメディアシード 株式会社\tmeo.collect@gmail.com\tNULL\tNULL\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1533
+}

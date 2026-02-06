@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, userId, status FROM subscriptions;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT id, userId, status FROM subscriptions;",
+  "rows": [
+    {
+      "id": "150001",
+      "userId": "1740017",
+      "status": "incomplete"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tstatus\n150001\t1740017\tincomplete\n",
+  "stderr": "",
+  "execution_time_ms": 1608
+}

@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { ArrowRight, Check, CreditCard, Loader2, Shield, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 
 const features = [
@@ -14,19 +13,21 @@ const features = [
   "Word形式エクスポート",
 ];
 
+/**
+ * サブスクリプション登録ページ
+ * 
+ * リダイレクトルール（シンプル）：
+ * - 未ログイン → / (ランディング)
+ * - ログイン済み＋サブスクリプションあり＋プロファイルあり → /home
+ * - それ以外 → このページを表示（サブスクリプションの有無に関係なく）
+ * 
+ * サブスクリプションがあってもプロファイルがない場合は、
+ * このページに「AIツール使用画面へ移動」ボタンを表示して
+ * ユーザーが /register に遷移できるようにする。
+ */
 export default function Subscription() {
   const { loading: authLoading, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
-  const searchString = useSearch();
-  const [skipRedirect, setSkipRedirect] = useState(false);
-
-  // URLパラメータでforce=trueがある場合はリダイレクトをスキップ
-  useEffect(() => {
-    const params = new URLSearchParams(searchString);
-    if (params.get('force') === 'true') {
-      setSkipRedirect(true);
-    }
-  }, [searchString]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -37,6 +38,8 @@ export default function Subscription() {
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
+
+  const verifySession = trpc.subscription.verifySession.useMutation();
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
@@ -54,30 +57,67 @@ export default function Subscription() {
   const handleSubscribe = () => {
     // 二重払い防止：既にサブスクリプションが存在する場合はStripeに移行しない
     if (subscription) {
-      toast.info("既にサブスクリプションに登録済みです。AIツール画面に移動します。");
-      setLocation("/home");
+      toast.info("既にサブスクリプションに登録済みです。");
+      if (!profile) {
+        window.location.href = "/register";
+      } else {
+        window.location.href = "/home";
+      }
       return;
     }
     createCheckout.mutate();
   };
 
+  // 「AIツール使用画面へ移動」ボタンのハンドラ
+  // まずverifySessionでサブスクリプションを同期してから遷移する
+  const handleGoToApp = async () => {
+    setIsSyncing(true);
+    try {
+      // サブスクリプションを同期
+      const result = await verifySession.mutateAsync({});
+      console.log("Verify session result:", result);
+      
+      // サブスクリプション情報を再取得
+      await refetchSubscription();
+      
+      // 遷移先を決定
+      if (!profile) {
+        window.location.href = "/register";
+      } else {
+        window.location.href = "/home";
+      }
+    } catch (err) {
+      console.error("Failed to verify session:", err);
+      // エラーでも遷移を試みる
+      if (!profile) {
+        window.location.href = "/register";
+      } else {
+        window.location.href = "/home";
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 未ログインの場合はランディングページへ
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      setLocation("/");
+      window.location.href = "/";
     }
-  }, [authLoading, isAuthenticated, setLocation]);
+  }, [authLoading, isAuthenticated]);
 
+  // サブスクリプションが存在し、プロファイルも存在する場合のみホームへリダイレクト
+  // （両方揃っている＝完全に登録済みなのでこのページに留まる必要がない）
   useEffect(() => {
-    if (skipRedirect) return; // force=trueの場合はリダイレクトしない
-    if (!authLoading && isAuthenticated && !subscriptionLoading && !profileLoading && subscription?.status === "active") {
-      if (!profile) {
-        setLocation("/register");
-      } else {
-        setLocation("/home");
-      }
+    if (authLoading || subscriptionLoading || profileLoading) return;
+    if (!isAuthenticated) return;
+    
+    if (subscription && profile) {
+      window.location.href = "/home";
     }
-  }, [authLoading, isAuthenticated, subscriptionLoading, profileLoading, subscription, profile, setLocation, skipRedirect]);
+  }, [authLoading, subscriptionLoading, profileLoading, subscription, profile, isAuthenticated]);
 
+  // タブ復帰時にサブスクリプション状態を再取得
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isAuthenticated) {
@@ -217,18 +257,20 @@ export default function Subscription() {
               variant="outline"
               className="w-full glass-button h-12 rounded-xl"
               type="button"
-              onClick={() => {
-                // プロファイルがない場合は登録画面へ、ある場合はホームへ
-                // skip=trueパラメータを追加してサブスクリプションチェックをスキップ
-                if (!profile) {
-                  window.location.href = "/register";
-                } else {
-                  window.location.href = "/home?skip=true";
-                }
-              }}
+              onClick={handleGoToApp}
+              disabled={isSyncing}
             >
-              <ArrowRight className="mr-2 h-4 w-4" />
-              AIツール使用画面へ移動
+              {isSyncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  確認中...
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="mr-2 h-4 w-4" />
+                  AIツール使用画面へ移動
+                </>
+              )}
             </Button>
           </div>
         </div>

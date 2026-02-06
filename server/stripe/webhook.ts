@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import Stripe from "stripe";
 import { getStripe } from "./client";
 import { ENV } from "../_core/env";
-import { getSubscriptionByStripeSubscriptionId, updateSubscriptionByStripeId, getSubscriptionByStripeCustomerId, updateSubscription } from "../db";
+import { getSubscriptionByStripeSubscriptionId, updateSubscriptionByStripeId, getSubscriptionByStripeCustomerId, updateSubscription, createSubscription, getSubscription } from "../db";
 import { SUBSCRIPTION_PLAN } from "./products";
 
 // Extended types for Stripe objects with additional properties
@@ -55,13 +55,20 @@ export async function handleStripeWebhook(req: Request, res: Response) {
         console.log("[Webhook] Session mode:", session.mode);
         console.log("[Webhook] Session subscription:", session.subscription);
         console.log("[Webhook] Session customer:", session.customer);
+        console.log("[Webhook] Session client_reference_id:", session.client_reference_id);
+        console.log("[Webhook] Session metadata:", JSON.stringify(session.metadata));
 
         if (session.mode === "subscription" && session.subscription) {
           const subscriptionId = typeof session.subscription === "string" 
             ? session.subscription 
             : session.subscription.id;
 
+          const customerId = session.customer
+            ? (typeof session.customer === "string" ? session.customer : session.customer.id)
+            : null;
+
           console.log("[Webhook] Subscription ID:", subscriptionId);
+          console.log("[Webhook] Customer ID:", customerId);
 
           // Get subscription details from Stripe
           const stripeSubscriptionResponse = await stripe.subscriptions.retrieve(subscriptionId);
@@ -72,30 +79,78 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           console.log("[Webhook] Stripe subscription status:", stripeSubscription.status);
           console.log("[Webhook] Started at:", new Date(startedAt).toISOString());
 
-          // Update subscription in database
-          if (session.customer) {
-            const customerId = typeof session.customer === "string" 
-              ? session.customer 
-              : session.customer.id;
+          // Try to find existing subscription by customer ID
+          let existingSubscription = customerId 
+            ? await getSubscriptionByStripeCustomerId(customerId) 
+            : null;
 
-            console.log("[Webhook] Customer ID:", customerId);
+          // If not found by customer ID, try to find by user ID from client_reference_id
+          if (!existingSubscription && session.client_reference_id) {
+            const userId = parseInt(session.client_reference_id, 10);
+            if (!isNaN(userId)) {
+              console.log("[Webhook] Looking up subscription by userId from client_reference_id:", userId);
+              existingSubscription = await getSubscription(userId) ?? null;
+            }
+          }
 
-            const existingSubscription = await getSubscriptionByStripeCustomerId(customerId);
-            console.log("[Webhook] Existing subscription:", existingSubscription);
+          // If not found by user ID either, try metadata
+          if (!existingSubscription && session.metadata?.user_id) {
+            const userId = parseInt(session.metadata.user_id, 10);
+            if (!isNaN(userId)) {
+              console.log("[Webhook] Looking up subscription by userId from metadata:", userId);
+              existingSubscription = await getSubscription(userId) ?? null;
+            }
+          }
 
-            if (existingSubscription) {
-              console.log("[Webhook] Updating subscription for user:", existingSubscription.userId);
-              await updateSubscription(existingSubscription.userId, {
-                stripeSubscriptionId: subscriptionId,
-                status: "active",
-                startedAt,
-                initialPeriodEndsAt,
-                isInInitialPeriod: true,
-                currentPeriodEnd: stripeSubscription.current_period_end * 1000,
-              });
-              console.log("[Webhook] Subscription updated successfully to active");
+          if (existingSubscription) {
+            // Update existing subscription
+            console.log("[Webhook] Updating subscription for user:", existingSubscription.userId);
+            await updateSubscription(existingSubscription.userId, {
+              stripeCustomerId: customerId || existingSubscription.stripeCustomerId,
+              stripeSubscriptionId: subscriptionId,
+              status: "active",
+              startedAt,
+              initialPeriodEndsAt,
+              isInInitialPeriod: true,
+              currentPeriodEnd: stripeSubscription.current_period_end * 1000,
+            });
+            console.log("[Webhook] Subscription updated successfully to active");
+          } else {
+            // Create new subscription if we have a user ID
+            const userId = session.client_reference_id 
+              ? parseInt(session.client_reference_id, 10) 
+              : (session.metadata?.user_id ? parseInt(session.metadata.user_id, 10) : null);
+
+            if (userId && !isNaN(userId)) {
+              console.log("[Webhook] Creating new subscription for user:", userId);
+              try {
+                await createSubscription({
+                  userId,
+                  stripeCustomerId: customerId || undefined,
+                  stripeSubscriptionId: subscriptionId,
+                  status: "active",
+                  startedAt,
+                  initialPeriodEndsAt,
+                  isInInitialPeriod: true,
+                  currentPeriodEnd: stripeSubscription.current_period_end * 1000,
+                });
+                console.log("[Webhook] New subscription created successfully");
+              } catch (createError) {
+                console.error("[Webhook] Failed to create subscription:", createError);
+                // If duplicate key error, try to update instead
+                await updateSubscription(userId, {
+                  stripeCustomerId: customerId || undefined,
+                  stripeSubscriptionId: subscriptionId,
+                  status: "active",
+                  startedAt,
+                  initialPeriodEndsAt,
+                  isInInitialPeriod: true,
+                  currentPeriodEnd: stripeSubscription.current_period_end * 1000,
+                });
+                console.log("[Webhook] Updated subscription after create failure");
+              }
             } else {
-              console.log("[Webhook] No existing subscription found for customer:", customerId);
+              console.error("[Webhook] No user ID found in session - cannot create subscription");
             }
           }
         }

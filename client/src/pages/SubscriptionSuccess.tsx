@@ -1,60 +1,58 @@
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Home, Loader2, UserPlus } from "lucide-react";
-import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
-// utilsは使用しないので削除
 
+/**
+ * 決済完了ページ
+ * 
+ * Stripe決済完了後にリダイレクトされるページ。
+ * 1. URLからsession_idを取得
+ * 2. verifySession APIを呼び出してサブスクリプションをDBに同期
+ * 3. プロファイルの有無で次の遷移先を決定
+ */
 export default function SubscriptionSuccess() {
-  const [, setLocation] = useLocation();
   const [isChecking, setIsChecking] = useState(true);
+  const [syncError, setSyncError] = useState(false);
 
-
-  // サブスクリプション状態を確認
-  const { data: subscription, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
-    refetchOnMount: 'always',
-  });
+  // URLからsession_idを取得
+  const searchParams = new URLSearchParams(window.location.search);
+  const sessionId = searchParams.get("session_id") || undefined;
 
   // プロファイル状態を確認
   const { data: profile, refetch: refetchProfile } = trpc.profile.get.useQuery(undefined, {
     refetchOnMount: 'always',
   });
 
+  // サブスクリプション同期API
+  const verifySession = trpc.subscription.verifySession.useMutation();
+
   useEffect(() => {
-    // ページ表示時にサブスクリプション状態とプロファイルを再取得
-    const checkStatus = async () => {
-      console.log("Checking subscription and profile status after payment...");
+    const syncAndCheck = async () => {
+      console.log("Syncing subscription from Stripe session...", sessionId);
       
-      // 少し待ってからサブスクリプション状態を確認
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // サブスクリプション状態とプロファイルを再取得
-      await refetchSubscription();
+      try {
+        // Stripe Checkout Sessionからサブスクリプションを同期
+        const result = await verifySession.mutateAsync({ sessionId });
+        console.log("Verify session result:", result);
+        
+        if (result.synced) {
+          console.log("Subscription synced successfully!");
+        }
+      } catch (err) {
+        console.error("Failed to verify session:", err);
+        setSyncError(true);
+      }
+
+      // プロファイル状態を再取得
       await refetchProfile();
-      
       setIsChecking(false);
     };
 
-    checkStatus();
-  }, [refetchSubscription, refetchProfile]);
-
-  // サブスクリプションとプロファイルの状態に応じて自動遷移
-  useEffect(() => {
-    if (!isChecking) {
-      if (subscription?.status === "active") {
-        // サブスクリプションがアクティブな場合
-        if (profile) {
-          // プロファイルがある場合はホームへ
-          console.log("Subscription active and profile exists, redirecting to /home");
-          setLocation("/home");
-        } else {
-          // プロファイルがない場合は会員登録へ
-          console.log("Subscription active but no profile, redirecting to /register");
-          setLocation("/register");
-        }
-      }
-    }
-  }, [isChecking, subscription, profile, setLocation]);
+    // 少し待ってからWebhookの処理が完了する時間を確保
+    const timer = setTimeout(syncAndCheck, 1500);
+    return () => clearTimeout(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleContinue = () => {
     // プロファイルがある場合はホームへ、ない場合は会員登録へ
@@ -83,9 +81,13 @@ export default function SubscriptionSuccess() {
         
         <div className="p-5 rounded-2xl bg-white/40 backdrop-blur-sm border border-white/30 mb-6">
           <p className="text-sm text-muted-foreground">
-            {profile 
-              ? "AIアプリをご利用いただけます。" 
-              : "次に会員情報を登録して、AIアプリをご利用いただけるようになります。"}
+            {isChecking
+              ? "サブスクリプション情報を同期中です..."
+              : syncError
+                ? "同期に問題がありましたが、しばらくすると反映されます。"
+                : profile 
+                  ? "AIアプリをご利用いただけます。" 
+                  : "次に会員情報を登録して、AIアプリをご利用いただけるようになります。"}
           </p>
         </div>
         

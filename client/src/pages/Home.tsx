@@ -11,7 +11,6 @@ import {
   Sparkles
 } from "lucide-react";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 
@@ -48,32 +47,38 @@ const benefits = [
 
 export default function Home() {
   const { loading: authLoading, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
+  // サブスクリプションが「存在する」かどうかをチェック（ステータスに関係なく）
   const { data: subscription, isLoading: subscriptionLoading } = trpc.subscription.get.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchOnMount: 'always',
   });
 
+  // ログイン済みユーザーの自動リダイレクト
+  // URLパラメータには一切依存しない
   useEffect(() => {
     if (authLoading) return;
     if (!isAuthenticated) return;
     if (subscriptionLoading || profileLoading) return;
     
-    if (!subscription || subscription.status !== "active") {
+    // サブスクリプションがない場合 → /subscription
+    if (!subscription) {
       window.location.href = "/subscription";
       return;
     }
     
+    // サブスクリプションあり＋プロファイルなし → /register
     if (!profile) {
       window.location.href = "/register";
-    } else {
-      window.location.href = "/home";
+      return;
     }
+    
+    // サブスクリプションあり＋プロファイルあり → /home
+    window.location.href = "/home";
   }, [authLoading, profileLoading, subscriptionLoading, isAuthenticated, profile, subscription]);
 
   const handleLogin = () => {

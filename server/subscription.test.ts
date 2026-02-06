@@ -20,11 +20,27 @@ vi.mock("./stripe/client", () => ({
         create: vi.fn().mockResolvedValue({
           url: "https://checkout.stripe.com/test-session",
         }),
+        retrieve: vi.fn().mockResolvedValue({
+          id: "cs_test_123",
+          status: "complete",
+          payment_status: "paid",
+          subscription: "sub_synced_123",
+          customer: "cus_synced_123",
+        }),
       },
     },
     subscriptions: {
       update: vi.fn().mockResolvedValue({}),
       cancel: vi.fn().mockResolvedValue({}),
+      retrieve: vi.fn().mockResolvedValue({
+        id: "sub_synced_123",
+        start_date: Math.floor(Date.now() / 1000),
+        current_period_end: Math.floor(Date.now() / 1000) + 2592000,
+        status: "active",
+      }),
+      list: vi.fn().mockResolvedValue({
+        data: [],
+      }),
     },
   }),
 }));
@@ -178,5 +194,94 @@ describe("subscription router", () => {
     expect(result.requiresConfirmation).toBe(true);
     expect(result.cancellationFee).toBeGreaterThanOrEqual(0);
     expect(result.message).toContain("初回契約期間中");
+  });
+});
+
+describe("subscription.verifySession", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return active without sync when subscription is already active", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: "cus_test123",
+      stripeSubscriptionId: "sub_test123",
+      status: "active",
+      startedAt: Date.now(),
+      initialPeriodEndsAt: Date.now() + 365 * 24 * 60 * 60 * 1000,
+      isInInitialPeriod: true,
+      currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      canceledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.verifySession({ sessionId: undefined });
+
+    expect(result.status).toBe("active");
+    expect(result.synced).toBe(false);
+  });
+
+  it("should sync subscription from Stripe session when incomplete", async () => {
+    const { getSubscription, updateSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: "cus_test123",
+      stripeSubscriptionId: null,
+      status: "incomplete",
+      startedAt: null,
+      initialPeriodEndsAt: null,
+      isInInitialPeriod: true,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.verifySession({ sessionId: "cs_test_123" });
+
+    expect(result.status).toBe("active");
+    expect(result.synced).toBe(true);
+    expect(updateSubscription).toHaveBeenCalledWith(1, expect.objectContaining({
+      status: "active",
+      stripeSubscriptionId: "sub_synced_123",
+    }));
+  });
+
+  it("should create new subscription when no existing record", async () => {
+    const { getSubscription, createSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce(undefined);
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.verifySession({ sessionId: "cs_test_123" });
+
+    expect(result.status).toBe("active");
+    expect(result.synced).toBe(true);
+    expect(createSubscription).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 1,
+      status: "active",
+      stripeSubscriptionId: "sub_synced_123",
+    }));
+  });
+
+  it("should return none when no subscription and no session ID", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce(undefined);
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.verifySession({});
+
+    expect(result.status).toBe("none");
+    expect(result.synced).toBe(false);
   });
 });

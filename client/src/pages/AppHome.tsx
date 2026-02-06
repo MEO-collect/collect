@@ -14,7 +14,6 @@ import {
   Image
 } from "lucide-react";
 import { useEffect } from "react";
-import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
 
@@ -57,15 +56,19 @@ function AppCard({ title, description, icon, isLocked = false, onClick }: AppCar
   );
 }
 
+/**
+ * ホーム画面（AIアプリ一覧）
+ * 
+ * リダイレクトルール（シンプル）：
+ * - 未ログイン → / (ランディング)
+ * - ログイン済み＋サブスクリプションなし → /subscription
+ * - ログイン済み＋サブスクリプションあり＋プロファイルなし → /register
+ * - ログイン済み＋サブスクリプションあり＋プロファイルあり → このページを表示
+ * 
+ * URLパラメータには一切依存しない。
+ */
 export default function AppHome() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
-  const [, setLocation] = useLocation();
-  const searchString = useSearch();
-  
-  // URLパラメータでskip=trueがある場合はサブスクリプションチェックをスキップ
-  // 初期化時に直接URLパラメータをチェック（useEffectより前に実行される）
-  const skipSubscriptionCheck = typeof window !== 'undefined' && 
-    new URLSearchParams(window.location.search).get('skip') === 'true';
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -75,28 +78,30 @@ export default function AppHome() {
     enabled: isAuthenticated,
   });
 
+  // 未ログインの場合はランディングページへ
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       window.location.href = "/";
     }
   }, [authLoading, isAuthenticated]);
 
+  // サブスクリプションがない場合は /subscription へ
   useEffect(() => {
-    if (!authLoading && !profileLoading && isAuthenticated && !profile) {
-      window.location.href = "/register";
-    }
-  }, [authLoading, profileLoading, isAuthenticated, profile]);
-
-  // サブスクリプションがない場合のみリダイレクト（ステータスが「active」以外でも、サブスクリプションが存在すれば表示を許可）
-  // Webhookの処理タイミングによるリダイレクトループを防止
-  // skip=trueパラメータがある場合はリダイレクトしない
-  useEffect(() => {
-    if (skipSubscriptionCheck) return;
-    // サブスクリプションが全く存在しない場合のみリダイレクト
-    if (!subscriptionLoading && !subscription) {
+    if (authLoading || subscriptionLoading) return;
+    if (!isAuthenticated) return;
+    if (!subscription) {
       window.location.href = "/subscription";
     }
-  }, [subscriptionLoading, subscription, skipSubscriptionCheck]);
+  }, [authLoading, subscriptionLoading, isAuthenticated, subscription]);
+
+  // サブスクリプションはあるがプロファイルがない場合は /register へ
+  useEffect(() => {
+    if (authLoading || subscriptionLoading || profileLoading) return;
+    if (!isAuthenticated) return;
+    if (subscription && !profile) {
+      window.location.href = "/register";
+    }
+  }, [authLoading, subscriptionLoading, profileLoading, isAuthenticated, subscription, profile]);
 
   const handleLogout = async () => {
     await logout();
@@ -131,6 +136,17 @@ export default function AppHome() {
           >
             ログイン
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // サブスクリプションまたはプロファイルがない場合はローディング表示（リダイレクト待ち）
+  if (!subscription || !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </div>
     );
@@ -254,7 +270,8 @@ export default function AppHome() {
                     ? "text-emerald-600" 
                     : "text-amber-600"
                 }`}>
-                  {subscription.status === "active" ? "有効" : subscription.status}
+                  {subscription.status === "active" ? "有効" : 
+                   subscription.status === "incomplete" ? "処理中" : subscription.status}
                 </span>
               </div>
             </div>

@@ -5,12 +5,20 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { Building2, Loader2, Mail, User, UserPlus } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { toast } from "sonner";
 
+/**
+ * 会員情報登録ページ
+ * 
+ * リダイレクトルール（シンプル）：
+ * - 未ログイン → / (ランディング)
+ * - それ以外 → このページを表示（サブスクリプション状態に関係なく）
+ * 
+ * 理由：このページに来るのは、SubscriptionSuccessやSubscriptionページから
+ * 明示的に遷移してきた場合のみ。サブスクリプションの有無でリダイレクトしない。
+ */
 export default function Register() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
   
   const [contactName, setContactName] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -20,18 +28,13 @@ export default function Register() {
     enabled: isAuthenticated,
   });
 
-  const { data: subscription, isLoading: subscriptionLoading } = trpc.subscription.get.useQuery(undefined, {
-    enabled: isAuthenticated,
-    refetchOnMount: 'always',
-  });
-
   const utils = trpc.useUtils();
 
   const upsertProfile = trpc.profile.upsert.useMutation({
     onSuccess: async () => {
       toast.success("会員情報を登録しました");
       await utils.profile.get.invalidate();
-      await utils.subscription.get.invalidate();
+      // 登録完了後はホーム画面へ直接遷移
       window.location.href = "/home";
     },
     onError: (error) => {
@@ -39,6 +42,7 @@ export default function Register() {
     },
   });
 
+  // プロファイルデータがある場合はフォームにセット
   useEffect(() => {
     if (profile) {
       setContactName(profile.contactName);
@@ -49,24 +53,20 @@ export default function Register() {
     }
   }, [profile, user]);
 
+  // 未ログインの場合のみランディングページへリダイレクト
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       window.location.href = "/";
     }
   }, [authLoading, isAuthenticated]);
 
+  // プロファイルが既に存在する場合はホームへリダイレクト
+  // （既に登録済みなのでこのページに留まる必要がない）
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !subscriptionLoading) {
-      if (!subscription || subscription.status !== "active") {
-        window.location.href = "/subscription";
-        return;
-      }
-      
-      if (!profileLoading && profile) {
-        window.location.href = "/home";
-      }
+    if (!authLoading && !profileLoading && isAuthenticated && profile) {
+      window.location.href = "/home";
     }
-  }, [authLoading, profileLoading, subscriptionLoading, profile, subscription, isAuthenticated]);
+  }, [authLoading, profileLoading, isAuthenticated, profile]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +77,7 @@ export default function Register() {
     });
   };
 
-  if (authLoading || subscriptionLoading) {
+  if (authLoading || profileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
         <div className="glass-card p-8">
@@ -88,16 +88,6 @@ export default function Register() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center gradient-mesh">
-        <div className="glass-card p-8">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!subscription || subscription.status !== "active") {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
         <div className="glass-card p-8">

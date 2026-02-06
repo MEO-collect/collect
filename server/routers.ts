@@ -73,6 +73,125 @@ export const appRouter = router({
       };
     }),
 
+    // Verify and sync subscription from Stripe Checkout Session
+    // This is a fallback for when webhooks fail or are delayed
+    verifySession: protectedProcedure
+      .input(z.object({
+        sessionId: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const stripe = getStripe();
+        const userId = ctx.user.id;
+
+        // First check if user already has an active subscription
+        const existing = await getSubscription(userId);
+        if (existing && existing.status === "active" && existing.stripeSubscriptionId) {
+          return { status: "active", synced: false };
+        }
+
+        // If we have a session ID, verify it with Stripe
+        if (input.sessionId) {
+          try {
+            const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+            console.log("[VerifySession] Session:", session.id, "status:", session.status, "payment_status:", session.payment_status);
+
+            if (session.status === "complete" && session.subscription) {
+              const subscriptionId = typeof session.subscription === "string"
+                ? session.subscription
+                : session.subscription.id;
+
+              const customerId = session.customer
+                ? (typeof session.customer === "string" ? session.customer : session.customer.id)
+                : null;
+
+              // Get subscription details from Stripe
+              const stripeSubResponse = await stripe.subscriptions.retrieve(subscriptionId);
+              const stripeSub = stripeSubResponse as unknown as { id: string; start_date: number; current_period_end: number; status: string };
+              const startedAt = stripeSub.start_date * 1000;
+              const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+
+              if (existing) {
+                // Update existing subscription
+                await updateSubscription(userId, {
+                  stripeCustomerId: customerId || existing.stripeCustomerId,
+                  stripeSubscriptionId: subscriptionId,
+                  status: "active",
+                  startedAt,
+                  initialPeriodEndsAt,
+                  isInInitialPeriod: true,
+                  currentPeriodEnd: stripeSub.current_period_end * 1000,
+                });
+                console.log("[VerifySession] Updated subscription for user:", userId);
+              } else {
+                // Create new subscription
+                try {
+                  await createSubscription({
+                    userId,
+                    stripeCustomerId: customerId || undefined,
+                    stripeSubscriptionId: subscriptionId,
+                    status: "active",
+                    startedAt,
+                    initialPeriodEndsAt,
+                    isInInitialPeriod: true,
+                    currentPeriodEnd: stripeSub.current_period_end * 1000,
+                  });
+                  console.log("[VerifySession] Created new subscription for user:", userId);
+                } catch (createError) {
+                  // If duplicate key, update instead
+                  await updateSubscription(userId, {
+                    stripeCustomerId: customerId || undefined,
+                    stripeSubscriptionId: subscriptionId,
+                    status: "active",
+                    startedAt,
+                    initialPeriodEndsAt,
+                    isInInitialPeriod: true,
+                    currentPeriodEnd: stripeSub.current_period_end * 1000,
+                  });
+                  console.log("[VerifySession] Updated subscription after create failure for user:", userId);
+                }
+              }
+              return { status: "active", synced: true };
+            }
+          } catch (err) {
+            console.error("[VerifySession] Error verifying session:", err);
+          }
+        }
+
+        // If no session ID, check if user has any Stripe customer with active subscription
+        // by looking at the existing subscription record
+        if (existing && existing.stripeCustomerId) {
+          try {
+            // List subscriptions for this customer
+            const customerSubs = await stripe.subscriptions.list({
+              customer: existing.stripeCustomerId,
+              status: "active",
+              limit: 1,
+            });
+
+            if (customerSubs.data.length > 0) {
+              const stripeSub = customerSubs.data[0] as unknown as { id: string; start_date: number; current_period_end: number; status: string };
+              const startedAt = stripeSub.start_date * 1000;
+              const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+
+              await updateSubscription(userId, {
+                stripeSubscriptionId: stripeSub.id,
+                status: "active",
+                startedAt,
+                initialPeriodEndsAt,
+                isInInitialPeriod: true,
+                currentPeriodEnd: stripeSub.current_period_end * 1000,
+              });
+              console.log("[VerifySession] Synced active subscription from Stripe customer for user:", userId);
+              return { status: "active", synced: true };
+            }
+          } catch (err) {
+            console.error("[VerifySession] Error checking Stripe customer:", err);
+          }
+        }
+
+        return { status: existing?.status || "none", synced: false };
+      }),
+
     createCheckoutSession: protectedProcedure.mutation(async ({ ctx }) => {
       const stripe = getStripe();
       const origin = ctx.req.headers.origin || "http://localhost:3000";

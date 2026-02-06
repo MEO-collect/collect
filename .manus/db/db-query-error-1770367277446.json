@@ -1,0 +1,8 @@
+{
+  "query": "SELECT u.id, u.open_id, u.name, u.email, s.id as sub_id, s.user_id as sub_user_id, s.stripe_customer_id, s.stripe_subscription_id, s.status as sub_status FROM users u LEFT JOIN subscriptions s ON u.id = s.user_id ORDER BY u.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT u.id, u.open_id, u.name, u.email, s.id as sub_id, s.user_id as sub_user_id, s.stripe_customer_id, s.stripe_subscription_id, s.status as sub_status FROM users u LEFT JOIN subscriptions s ON u.id = s.user_id ORDER BY u.id;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 's.user_id' in 'on clause'"
+  ]
+}

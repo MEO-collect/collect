@@ -1,0 +1,16 @@
+{
+  "query": "SELECT userId, status, stripeCustomerId, stripeSubscriptionId FROM subscriptions;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT userId, status, stripeCustomerId, stripeSubscriptionId FROM subscriptions;",
+  "rows": [
+    {
+      "userId": "1740017",
+      "status": "incomplete",
+      "stripeCustomerId": "cus_TvFIhapVNEyZxD",
+      "stripeSubscriptionId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "userId\tstatus\tstripeCustomerId\tstripeSubscriptionId\n1740017\tincomplete\tcus_TvFIhapVNEyZxD\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1573
+}
