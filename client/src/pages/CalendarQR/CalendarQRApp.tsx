@@ -25,13 +25,13 @@ import {
   ArrowLeft,
   Calendar,
   CalendarPlus,
+  Clock,
   Download,
   MapPin,
   Plus,
   QrCode,
   Smartphone,
   Trash2,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
@@ -42,6 +42,10 @@ interface ScheduleItem {
   name: string;
   calendarTitle: string;
   daysFromToday: number;
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
   memo: string;
   location: string;
 }
@@ -53,6 +57,10 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
     name: "トリミング",
     calendarTitle: "ペットのトリミング予約",
     daysFromToday: 30,
+    startHour: 10,
+    startMinute: 0,
+    endHour: 11,
+    endMinute: 0,
     memo: "シャンプー＆カットコース",
     location: "ペットサロン ABC",
   },
@@ -61,6 +69,10 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
     name: "ワクチン接種",
     calendarTitle: "ワクチン接種",
     daysFromToday: 90,
+    startHour: 14,
+    startMinute: 0,
+    endHour: 15,
+    endMinute: 0,
     memo: "混合ワクチン（年1回）",
     location: "○○動物病院",
   },
@@ -69,6 +81,10 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
     name: "定期検診",
     calendarTitle: "定期健康診断",
     daysFromToday: 180,
+    startHour: 9,
+    startMinute: 30,
+    endHour: 11,
+    endMinute: 0,
     memo: "血液検査・レントゲン",
     location: "○○動物病院",
   },
@@ -77,6 +93,10 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
     name: "フィラリア予防",
     calendarTitle: "フィラリア予防薬投与",
     daysFromToday: 30,
+    startHour: 10,
+    startMinute: 0,
+    endHour: 10,
+    endMinute: 30,
     memo: "毎月1回投与",
     location: "",
   },
@@ -85,6 +105,10 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
     name: "歯科クリーニング",
     calendarTitle: "ペット歯科クリーニング",
     daysFromToday: 365,
+    startHour: 13,
+    startMinute: 0,
+    endHour: 15,
+    endMinute: 0,
     memo: "年1回の歯石除去",
     location: "○○動物病院",
   },
@@ -97,15 +121,31 @@ function generateId(): string {
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function getTargetDate(daysFromToday: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromToday);
-  d.setHours(12, 0, 0, 0);
-  return d;
+/** Get target date with specified time in JST (Asia/Tokyo) */
+function getTargetDateJST(
+  daysFromToday: number,
+  hour: number,
+  minute: number
+): { year: number; month: number; day: number; hour: number; minute: number } {
+  // Calculate the target date in JST
+  const now = new Date();
+  // Get current JST date components
+  const jstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  jstNow.setDate(jstNow.getDate() + daysFromToday);
+
+  return {
+    year: jstNow.getFullYear(),
+    month: jstNow.getMonth() + 1,
+    day: jstNow.getDate(),
+    hour,
+    minute,
+  };
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("ja-JP", {
+function formatDateFromJST(jst: { year: number; month: number; day: number }): string {
+  // Create a date string for display
+  const d = new Date(jst.year, jst.month - 1, jst.day);
+  return d.toLocaleDateString("ja-JP", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -113,32 +153,45 @@ function formatDate(date: Date): string {
   });
 }
 
-function formatDateCompact(date: Date): string {
-  return date.toLocaleDateString("ja-JP", {
+function formatDateCompactFromJST(jst: { month: number; day: number }): string {
+  const d = new Date(2026, jst.month - 1, jst.day);
+  return d.toLocaleDateString("ja-JP", {
     month: "short",
     day: "numeric",
   });
 }
 
+function padTwo(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function formatTime(hour: number, minute: number): string {
+  return `${padTwo(hour)}:${padTwo(minute)}`;
+}
+
+/** Format JST date/time as YYYYMMDDTHHMMSS (no Z suffix = local time) */
+function fmtJST(jst: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}): string {
+  return `${jst.year}${padTwo(jst.month)}${padTwo(jst.day)}T${padTwo(jst.hour)}${padTwo(jst.minute)}00`;
+}
+
 function toGoogleCalendarUrl(item: ScheduleItem): string {
-  const start = getTargetDate(item.daysFromToday);
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
+  const startJST = getTargetDateJST(item.daysFromToday, item.startHour, item.startMinute);
+  const endJST = getTargetDateJST(item.daysFromToday, item.endHour, item.endMinute);
 
-  const fmt = (d: Date) =>
-    d
-      .toISOString()
-      .replace(/[-:]/g, "")
-      .replace(/\.\d{3}/, "");
-
-  // Google Calendar uses UTC times
-  const startUtc = new Date(start.getTime() - start.getTimezoneOffset() * 60000);
-  const endUtc = new Date(end.getTime() - end.getTimezoneOffset() * 60000);
+  // Use local time format (no Z) with ctz parameter
+  // This tells Google Calendar "these times are in the specified timezone"
+  const dates = `${fmtJST(startJST)}/${fmtJST(endJST)}`;
 
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: item.calendarTitle,
-    dates: `${fmt(startUtc)}/${fmt(endUtc)}`,
+    dates,
     details: item.memo,
     location: item.location,
     ctz: "Asia/Tokyo",
@@ -148,21 +201,19 @@ function toGoogleCalendarUrl(item: ScheduleItem): string {
 }
 
 function toICalendarData(item: ScheduleItem): string {
-  const start = getTargetDate(item.daysFromToday);
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
-
-  const fmtLocal = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const h = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    const s = String(d.getSeconds()).padStart(2, "0");
-    return `${y}${m}${day}T${h}${min}${s}`;
-  };
+  const startJST = getTargetDateJST(item.daysFromToday, item.startHour, item.startMinute);
+  const endJST = getTargetDateJST(item.daysFromToday, item.endHour, item.endMinute);
 
   const now = new Date();
+  const nowJST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const stampJST = {
+    year: nowJST.getFullYear(),
+    month: nowJST.getMonth() + 1,
+    day: nowJST.getDate(),
+    hour: nowJST.getHours(),
+    minute: nowJST.getMinutes(),
+  };
+
   const uid = `${Date.now()}@calendar-qr`;
 
   const lines = [
@@ -172,9 +223,9 @@ function toICalendarData(item: ScheduleItem): string {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `DTSTART;TZID=Asia/Tokyo:${fmtLocal(start)}`,
-    `DTEND;TZID=Asia/Tokyo:${fmtLocal(end)}`,
-    `DTSTAMP:${fmtLocal(now)}Z`,
+    `DTSTART;TZID=Asia/Tokyo:${fmtJST(startJST)}`,
+    `DTEND;TZID=Asia/Tokyo:${fmtJST(endJST)}`,
+    `DTSTAMP:${fmtJST(stampJST)}Z`,
     `UID:${uid}`,
     `SUMMARY:${item.calendarTitle}`,
     item.memo ? `DESCRIPTION:${item.memo.replace(/\n/g, "\\n")}` : "",
@@ -188,6 +239,52 @@ function toICalendarData(item: ScheduleItem): string {
   return lines;
 }
 
+// ============ Time Picker Component ============
+function TimePicker({
+  label,
+  hour,
+  minute,
+  onHourChange,
+  onMinuteChange,
+}: {
+  label: string;
+  hour: number;
+  minute: number;
+  onHourChange: (h: number) => void;
+  onMinuteChange: (m: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex items-center gap-1">
+        <select
+          value={hour}
+          onChange={(e) => onHourChange(Number(e.target.value))}
+          className="flex-1 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {Array.from({ length: 24 }, (_, i) => (
+            <option key={i} value={i}>
+              {padTwo(i)}
+            </option>
+          ))}
+        </select>
+        <span className="text-sm font-medium">:</span>
+        <select
+          value={minute}
+          onChange={(e) => onMinuteChange(Number(e.target.value))}
+          className="flex-1 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {[0, 15, 30, 45].map((m) => (
+            <option key={m} value={m}>
+              {padTwo(m)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 // ============ Sub-components ============
 
 function ScheduleCard({
@@ -199,7 +296,7 @@ function ScheduleCard({
   onSelect: (item: ScheduleItem) => void;
   onDelete: (item: ScheduleItem) => void;
 }) {
-  const targetDate = getTargetDate(item.daysFromToday);
+  const startJST = getTargetDateJST(item.daysFromToday, item.startHour, item.startMinute);
 
   return (
     <div
@@ -219,7 +316,11 @@ function ScheduleCard({
               <p className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">{item.daysFromToday}日後</span>
                 <span className="mx-1.5 text-border">|</span>
-                {formatDateCompact(targetDate)}
+                {formatDateCompactFromJST(startJST)}
+              </p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3 shrink-0" />
+                {formatTime(item.startHour, item.startMinute)} 〜 {formatTime(item.endHour, item.endMinute)}
               </p>
               {item.location && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -258,8 +359,14 @@ function AddScheduleForm({
   const [name, setName] = useState("");
   const [calendarTitle, setCalendarTitle] = useState("");
   const [daysFromToday, setDaysFromToday] = useState(30);
+  const [startHour, setStartHour] = useState(10);
+  const [startMinute, setStartMinute] = useState(0);
+  const [endHour, setEndHour] = useState(11);
+  const [endMinute, setEndMinute] = useState(0);
   const [memo, setMemo] = useState("");
   const [location, setLocation] = useState("");
+
+  const previewJST = getTargetDateJST(daysFromToday, startHour, startMinute);
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -270,16 +377,31 @@ function AddScheduleForm({
       toast.error("日数は0以上を入力してください");
       return;
     }
+    // Validate end time is after start time
+    const startTotal = startHour * 60 + startMinute;
+    const endTotal = endHour * 60 + endMinute;
+    if (endTotal <= startTotal) {
+      toast.error("終了時間は開始時間より後にしてください");
+      return;
+    }
     onAdd({
       name: name.trim(),
       calendarTitle: calendarTitle.trim() || name.trim(),
       daysFromToday,
+      startHour,
+      startMinute,
+      endHour,
+      endMinute,
       memo: memo.trim(),
       location: location.trim(),
     });
     setName("");
     setCalendarTitle("");
     setDaysFromToday(30);
+    setStartHour(10);
+    setStartMinute(0);
+    setEndHour(11);
+    setEndMinute(0);
     setMemo("");
     setLocation("");
     onClose();
@@ -288,7 +410,7 @@ function AddScheduleForm({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarPlus className="h-5 w-5 text-primary" />
@@ -327,9 +449,37 @@ function AddScheduleForm({
               onChange={(e) => setDaysFromToday(Number(e.target.value))}
             />
             <p className="text-xs text-muted-foreground">
-              予定日: {formatDate(getTargetDate(daysFromToday))} 12:00〜13:00
+              予定日: {formatDateFromJST(previewJST)}
             </p>
           </div>
+
+          {/* 時間指定 */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              時間
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <TimePicker
+                label="開始"
+                hour={startHour}
+                minute={startMinute}
+                onHourChange={setStartHour}
+                onMinuteChange={setStartMinute}
+              />
+              <TimePicker
+                label="終了"
+                hour={endHour}
+                minute={endMinute}
+                onHourChange={setEndHour}
+                onMinuteChange={setEndMinute}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {formatTime(startHour, startMinute)} 〜 {formatTime(endHour, endMinute)}（日本時間）
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="location">場所</Label>
             <Input
@@ -419,11 +569,11 @@ function QRCodeDisplay({
 
   if (!item) return null;
 
-  const targetDate = getTargetDate(item.daysFromToday);
+  const startJST = getTargetDateJST(item.daysFromToday, item.startHour, item.startMinute);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5 text-primary" />
@@ -438,11 +588,13 @@ function QRCodeDisplay({
         <div className="rounded-xl bg-muted/50 p-4 space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">予定日</span>
-            <span className="font-medium">{formatDate(targetDate)}</span>
+            <span className="font-medium">{formatDateFromJST(startJST)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">時間</span>
-            <span className="font-medium">12:00 〜 13:00</span>
+            <span className="font-medium">
+              {formatTime(item.startHour, item.startMinute)} 〜 {formatTime(item.endHour, item.endMinute)}
+            </span>
           </div>
           {item.location && (
             <div className="flex items-center justify-between text-sm">
@@ -543,7 +695,15 @@ export default function CalendarQRApp() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setSchedules(parsed);
+          // Migrate old data without time fields
+          const migrated = parsed.map((item: any) => ({
+            ...item,
+            startHour: item.startHour ?? 10,
+            startMinute: item.startMinute ?? 0,
+            endHour: item.endHour ?? 11,
+            endMinute: item.endMinute ?? 0,
+          }));
+          setSchedules(migrated);
         } else {
           setSchedules(DEFAULT_SCHEDULES);
         }

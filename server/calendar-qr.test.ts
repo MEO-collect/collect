@@ -2,39 +2,50 @@ import { describe, it, expect } from "vitest";
 
 /**
  * CalendarQR App - Unit Tests
- * 
+ *
  * このアプリはクライアントサイドのみ（LocalStorage + QRCode生成）で
  * サーバーサイドのAPIは不要。ここではヘルパー関数のロジックをテストする。
  */
 
 // ============ Helper Functions (from CalendarQRApp.tsx) ============
-// テスト用にロジックを再実装
 
 function generateId(): string {
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function getTargetDate(daysFromToday: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromToday);
-  d.setHours(12, 0, 0, 0);
-  return d;
+function padTwo(n: number): string {
+  return String(n).padStart(2, "0");
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  });
+function formatTime(hour: number, minute: number): string {
+  return `${padTwo(hour)}:${padTwo(minute)}`;
 }
 
-function formatDateCompact(date: Date): string {
-  return date.toLocaleDateString("ja-JP", {
-    month: "short",
-    day: "numeric",
-  });
+function getTargetDateJST(
+  daysFromToday: number,
+  hour: number,
+  minute: number
+): { year: number; month: number; day: number; hour: number; minute: number } {
+  const now = new Date();
+  const jstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  jstNow.setDate(jstNow.getDate() + daysFromToday);
+  return {
+    year: jstNow.getFullYear(),
+    month: jstNow.getMonth() + 1,
+    day: jstNow.getDate(),
+    hour,
+    minute,
+  };
+}
+
+function fmtJST(jst: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}): string {
+  return `${jst.year}${padTwo(jst.month)}${padTwo(jst.day)}T${padTwo(jst.hour)}${padTwo(jst.minute)}00`;
 }
 
 interface ScheduleItem {
@@ -42,28 +53,23 @@ interface ScheduleItem {
   name: string;
   calendarTitle: string;
   daysFromToday: number;
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
   memo: string;
   location: string;
 }
 
 function toGoogleCalendarUrl(item: ScheduleItem): string {
-  const start = getTargetDate(item.daysFromToday);
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
-
-  const fmt = (d: Date) =>
-    d
-      .toISOString()
-      .replace(/[-:]/g, "")
-      .replace(/\.\d{3}/, "");
-
-  const startUtc = new Date(start.getTime() - start.getTimezoneOffset() * 60000);
-  const endUtc = new Date(end.getTime() - end.getTimezoneOffset() * 60000);
+  const startJST = getTargetDateJST(item.daysFromToday, item.startHour, item.startMinute);
+  const endJST = getTargetDateJST(item.daysFromToday, item.endHour, item.endMinute);
+  const dates = `${fmtJST(startJST)}/${fmtJST(endJST)}`;
 
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: item.calendarTitle,
-    dates: `${fmt(startUtc)}/${fmt(endUtc)}`,
+    dates,
     details: item.memo,
     location: item.location,
     ctz: "Asia/Tokyo",
@@ -73,21 +79,19 @@ function toGoogleCalendarUrl(item: ScheduleItem): string {
 }
 
 function toICalendarData(item: ScheduleItem): string {
-  const start = getTargetDate(item.daysFromToday);
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
-
-  const fmtLocal = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const h = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    const s = String(d.getSeconds()).padStart(2, "0");
-    return `${y}${m}${day}T${h}${min}${s}`;
-  };
+  const startJST = getTargetDateJST(item.daysFromToday, item.startHour, item.startMinute);
+  const endJST = getTargetDateJST(item.daysFromToday, item.endHour, item.endMinute);
 
   const now = new Date();
+  const nowJST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const stampJST = {
+    year: nowJST.getFullYear(),
+    month: nowJST.getMonth() + 1,
+    day: nowJST.getDate(),
+    hour: nowJST.getHours(),
+    minute: nowJST.getMinutes(),
+  };
+
   const uid = `${Date.now()}@calendar-qr`;
 
   const lines = [
@@ -97,9 +101,9 @@ function toICalendarData(item: ScheduleItem): string {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `DTSTART;TZID=Asia/Tokyo:${fmtLocal(start)}`,
-    `DTEND;TZID=Asia/Tokyo:${fmtLocal(end)}`,
-    `DTSTAMP:${fmtLocal(now)}Z`,
+    `DTSTART;TZID=Asia/Tokyo:${fmtJST(startJST)}`,
+    `DTEND;TZID=Asia/Tokyo:${fmtJST(endJST)}`,
+    `DTSTAMP:${fmtJST(stampJST)}Z`,
     `UID:${uid}`,
     `SUMMARY:${item.calendarTitle}`,
     item.memo ? `DESCRIPTION:${item.memo.replace(/\n/g, "\\n")}` : "",
@@ -124,45 +128,48 @@ describe("CalendarQR - ID Generation", () => {
   });
 });
 
-describe("CalendarQR - Date Helpers", () => {
-  it("should calculate target date correctly for 0 days", () => {
-    const result = getTargetDate(0);
-    const today = new Date();
-    expect(result.getDate()).toBe(today.getDate());
-    expect(result.getHours()).toBe(12);
-    expect(result.getMinutes()).toBe(0);
+describe("CalendarQR - Time Formatting", () => {
+  it("should pad single digit hours", () => {
+    expect(formatTime(9, 0)).toBe("09:00");
   });
 
-  it("should calculate target date correctly for 30 days", () => {
-    const result = getTargetDate(30);
-    const expected = new Date();
-    expected.setDate(expected.getDate() + 30);
-    expect(result.getDate()).toBe(expected.getDate());
-    expect(result.getMonth()).toBe(expected.getMonth());
-    expect(result.getHours()).toBe(12);
+  it("should pad single digit minutes", () => {
+    expect(formatTime(10, 5)).toBe("10:05");
   });
 
-  it("should calculate target date correctly for 365 days", () => {
-    const result = getTargetDate(365);
-    const expected = new Date();
-    expected.setDate(expected.getDate() + 365);
-    expect(result.getDate()).toBe(expected.getDate());
-    expect(result.getHours()).toBe(12);
+  it("should handle midnight", () => {
+    expect(formatTime(0, 0)).toBe("00:00");
   });
 
-  it("should format date in Japanese locale", () => {
-    const date = new Date(2026, 2, 18, 12, 0, 0); // March 18, 2026
-    const formatted = formatDate(date);
-    expect(formatted).toContain("2026");
-    expect(formatted).toContain("3");
-    expect(formatted).toContain("18");
+  it("should handle 23:59", () => {
+    expect(formatTime(23, 59)).toBe("23:59");
+  });
+});
+
+describe("CalendarQR - JST Date Helpers", () => {
+  it("should return correct hour and minute", () => {
+    const result = getTargetDateJST(0, 14, 30);
+    expect(result.hour).toBe(14);
+    expect(result.minute).toBe(30);
   });
 
-  it("should format compact date", () => {
-    const date = new Date(2026, 2, 18, 12, 0, 0);
-    const formatted = formatDateCompact(date);
-    expect(formatted).toContain("3");
-    expect(formatted).toContain("18");
+  it("should calculate future date correctly", () => {
+    const today = getTargetDateJST(0, 10, 0);
+    const future = getTargetDateJST(30, 10, 0);
+    // The day should be different (approximately 30 days ahead)
+    expect(future.year * 10000 + future.month * 100 + future.day).toBeGreaterThan(
+      today.year * 10000 + today.month * 100 + today.day
+    );
+  });
+
+  it("should format JST date correctly", () => {
+    const jst = { year: 2026, month: 3, day: 18, hour: 10, minute: 30 };
+    expect(fmtJST(jst)).toBe("20260318T103000");
+  });
+
+  it("should pad single digit month and day", () => {
+    const jst = { year: 2026, month: 1, day: 5, hour: 9, minute: 0 };
+    expect(fmtJST(jst)).toBe("20260105T090000");
   });
 });
 
@@ -172,6 +179,10 @@ describe("CalendarQR - Google Calendar URL Generation", () => {
     name: "トリミング",
     calendarTitle: "ペットのトリミング予約",
     daysFromToday: 30,
+    startHour: 10,
+    startMinute: 0,
+    endHour: 11,
+    endMinute: 0,
     memo: "シャンプー＆カットコース",
     location: "ペットサロン ABC",
   };
@@ -189,9 +200,6 @@ describe("CalendarQR - Google Calendar URL Generation", () => {
 
   it("should include the location in the URL", () => {
     const url = toGoogleCalendarUrl(testItem);
-    // URLSearchParams encodes spaces as '+' instead of '%20'
-    expect(url).toContain("location=");
-    // Decode the URL to verify the location value
     const urlObj = new URL(url);
     expect(urlObj.searchParams.get("location")).toBe("ペットサロン ABC");
   });
@@ -206,10 +214,43 @@ describe("CalendarQR - Google Calendar URL Generation", () => {
     expect(url).toContain("ctz=Asia%2FTokyo");
   });
 
-  it("should include date range in correct format", () => {
+  it("should NOT include Z suffix in dates (local time format)", () => {
     const url = toGoogleCalendarUrl(testItem);
-    // dates parameter should contain two dates separated by /
-    expect(url).toMatch(/dates=\d{8}T\d{6}Z%2F\d{8}T\d{6}Z/);
+    // The dates should NOT end with Z - they should be local time
+    const urlObj = new URL(url);
+    const dates = urlObj.searchParams.get("dates") || "";
+    expect(dates).not.toContain("Z");
+  });
+
+  it("should include correct start time in dates", () => {
+    const url = toGoogleCalendarUrl(testItem);
+    const urlObj = new URL(url);
+    const dates = urlObj.searchParams.get("dates") || "";
+    // Should contain T100000 for 10:00
+    expect(dates).toContain("T100000/");
+  });
+
+  it("should include correct end time in dates", () => {
+    const url = toGoogleCalendarUrl(testItem);
+    const urlObj = new URL(url);
+    const dates = urlObj.searchParams.get("dates") || "";
+    // Should end with T110000 for 11:00
+    expect(dates).toMatch(/T110000$/);
+  });
+
+  it("should handle custom time correctly", () => {
+    const customItem: ScheduleItem = {
+      ...testItem,
+      startHour: 14,
+      startMinute: 30,
+      endHour: 16,
+      endMinute: 0,
+    };
+    const url = toGoogleCalendarUrl(customItem);
+    const urlObj = new URL(url);
+    const dates = urlObj.searchParams.get("dates") || "";
+    expect(dates).toContain("T143000/");
+    expect(dates).toMatch(/T160000$/);
   });
 });
 
@@ -219,6 +260,10 @@ describe("CalendarQR - iCalendar Data Generation", () => {
     name: "ワクチン接種",
     calendarTitle: "ワクチン接種",
     daysFromToday: 90,
+    startHour: 14,
+    startMinute: 0,
+    endHour: 15,
+    endMinute: 0,
     memo: "混合ワクチン（年1回）",
     location: "○○動物病院",
   };
@@ -262,17 +307,14 @@ describe("CalendarQR - iCalendar Data Generation", () => {
     expect(ical).toContain("DTEND;TZID=Asia/Tokyo:");
   });
 
-  it("should have 1 hour duration", () => {
+  it("should include correct start time (14:00)", () => {
     const ical = toICalendarData(testItem);
-    const startMatch = ical.match(/DTSTART;TZID=Asia\/Tokyo:(\d{8}T(\d{2})\d{4})/);
-    const endMatch = ical.match(/DTEND;TZID=Asia\/Tokyo:(\d{8}T(\d{2})\d{4})/);
-    expect(startMatch).not.toBeNull();
-    expect(endMatch).not.toBeNull();
-    if (startMatch && endMatch) {
-      const startHour = parseInt(startMatch[2]);
-      const endHour = parseInt(endMatch[2]);
-      expect(endHour - startHour).toBe(1);
-    }
+    expect(ical).toMatch(/DTSTART;TZID=Asia\/Tokyo:\d{8}T140000/);
+  });
+
+  it("should include correct end time (15:00)", () => {
+    const ical = toICalendarData(testItem);
+    expect(ical).toMatch(/DTEND;TZID=Asia\/Tokyo:\d{8}T150000/);
   });
 
   it("should not include location when empty", () => {
@@ -297,6 +339,19 @@ describe("CalendarQR - iCalendar Data Generation", () => {
     const ical = toICalendarData(testItem);
     expect(ical).toContain("\r\n");
   });
+
+  it("should handle custom time correctly", () => {
+    const customItem: ScheduleItem = {
+      ...testItem,
+      startHour: 9,
+      startMinute: 30,
+      endHour: 12,
+      endMinute: 45,
+    };
+    const ical = toICalendarData(customItem);
+    expect(ical).toMatch(/DTSTART;TZID=Asia\/Tokyo:\d{8}T093000/);
+    expect(ical).toMatch(/DTEND;TZID=Asia\/Tokyo:\d{8}T124500/);
+  });
 });
 
 describe("CalendarQR - Schedule Data Validation", () => {
@@ -306,6 +361,10 @@ describe("CalendarQR - Schedule Data Validation", () => {
       name: "定期検診",
       calendarTitle: "定期健康診断",
       daysFromToday: 180,
+      startHour: 9,
+      startMinute: 30,
+      endHour: 11,
+      endMinute: 0,
       memo: "血液検査・レントゲン",
       location: "○○動物病院",
     };
@@ -321,6 +380,10 @@ describe("CalendarQR - Schedule Data Validation", () => {
       name: "テスト",
       calendarTitle: "テスト",
       daysFromToday: 1,
+      startHour: 10,
+      startMinute: 0,
+      endHour: 11,
+      endMinute: 0,
       memo: "",
       location: "",
     };
@@ -336,11 +399,14 @@ describe("CalendarQR - Schedule Data Validation", () => {
       name: "テスト",
       calendarTitle: "テスト予定",
       daysFromToday: 7,
+      startHour: 10,
+      startMinute: 0,
+      endHour: 11,
+      endMinute: 0,
       memo: "行1\n行2\n行3",
       location: "東京都渋谷区",
     };
     const ical = toICalendarData(item);
-    // newlines should be escaped in iCal format
     expect(ical).toContain("DESCRIPTION:行1\\n行2\\n行3");
   });
 
@@ -350,11 +416,55 @@ describe("CalendarQR - Schedule Data Validation", () => {
       name: "今日の予定",
       calendarTitle: "今日の予定",
       daysFromToday: 0,
+      startHour: 15,
+      startMinute: 0,
+      endHour: 16,
+      endMinute: 0,
       memo: "",
       location: "",
     };
     const url = toGoogleCalendarUrl(item);
     expect(url).toBeTruthy();
+  });
+
+  it("should handle early morning time", () => {
+    const item: ScheduleItem = {
+      id: "test-early",
+      name: "早朝予定",
+      calendarTitle: "早朝予定",
+      daysFromToday: 1,
+      startHour: 6,
+      startMinute: 0,
+      endHour: 7,
+      endMinute: 30,
+      memo: "",
+      location: "",
+    };
+    const url = toGoogleCalendarUrl(item);
+    const urlObj = new URL(url);
+    const dates = urlObj.searchParams.get("dates") || "";
+    expect(dates).toContain("T060000/");
+    expect(dates).toMatch(/T073000$/);
+  });
+
+  it("should handle late evening time", () => {
+    const item: ScheduleItem = {
+      id: "test-late",
+      name: "夜の予定",
+      calendarTitle: "夜の予定",
+      daysFromToday: 1,
+      startHour: 21,
+      startMinute: 0,
+      endHour: 22,
+      endMinute: 30,
+      memo: "",
+      location: "",
+    };
+    const url = toGoogleCalendarUrl(item);
+    const urlObj = new URL(url);
+    const dates = urlObj.searchParams.get("dates") || "";
+    expect(dates).toContain("T210000/");
+    expect(dates).toMatch(/T223000$/);
   });
 });
 
@@ -365,6 +475,10 @@ describe("CalendarQR - Default Schedules", () => {
       name: "トリミング",
       calendarTitle: "ペットのトリミング予約",
       daysFromToday: 30,
+      startHour: 10,
+      startMinute: 0,
+      endHour: 11,
+      endMinute: 0,
       memo: "シャンプー＆カットコース",
       location: "ペットサロン ABC",
     },
@@ -373,6 +487,10 @@ describe("CalendarQR - Default Schedules", () => {
       name: "ワクチン接種",
       calendarTitle: "ワクチン接種",
       daysFromToday: 90,
+      startHour: 14,
+      startMinute: 0,
+      endHour: 15,
+      endMinute: 0,
       memo: "混合ワクチン（年1回）",
       location: "○○動物病院",
     },
@@ -381,6 +499,10 @@ describe("CalendarQR - Default Schedules", () => {
       name: "定期検診",
       calendarTitle: "定期健康診断",
       daysFromToday: 180,
+      startHour: 9,
+      startMinute: 30,
+      endHour: 11,
+      endMinute: 0,
       memo: "血液検査・レントゲン",
       location: "○○動物病院",
     },
@@ -389,6 +511,10 @@ describe("CalendarQR - Default Schedules", () => {
       name: "フィラリア予防",
       calendarTitle: "フィラリア予防薬投与",
       daysFromToday: 30,
+      startHour: 10,
+      startMinute: 0,
+      endHour: 10,
+      endMinute: 30,
       memo: "毎月1回投与",
       location: "",
     },
@@ -397,6 +523,10 @@ describe("CalendarQR - Default Schedules", () => {
       name: "歯科クリーニング",
       calendarTitle: "ペット歯科クリーニング",
       daysFromToday: 365,
+      startHour: 13,
+      startMinute: 0,
+      endHour: 15,
+      endMinute: 0,
       memo: "年1回の歯石除去",
       location: "○○動物病院",
     },
@@ -412,12 +542,28 @@ describe("CalendarQR - Default Schedules", () => {
     expect(uniqueIds.size).toBe(ids.length);
   });
 
-  it("should have all required fields", () => {
+  it("should have all required fields including time", () => {
     DEFAULT_SCHEDULES.forEach((item) => {
       expect(item.id).toBeTruthy();
       expect(item.name).toBeTruthy();
       expect(item.calendarTitle).toBeTruthy();
       expect(item.daysFromToday).toBeGreaterThanOrEqual(0);
+      expect(item.startHour).toBeGreaterThanOrEqual(0);
+      expect(item.startHour).toBeLessThanOrEqual(23);
+      expect(item.endHour).toBeGreaterThanOrEqual(0);
+      expect(item.endHour).toBeLessThanOrEqual(23);
+      expect(item.startMinute).toBeGreaterThanOrEqual(0);
+      expect(item.startMinute).toBeLessThanOrEqual(59);
+      expect(item.endMinute).toBeGreaterThanOrEqual(0);
+      expect(item.endMinute).toBeLessThanOrEqual(59);
+    });
+  });
+
+  it("should have end time after start time for all defaults", () => {
+    DEFAULT_SCHEDULES.forEach((item) => {
+      const startTotal = item.startHour * 60 + item.startMinute;
+      const endTotal = item.endHour * 60 + item.endMinute;
+      expect(endTotal).toBeGreaterThan(startTotal);
     });
   });
 
@@ -425,6 +571,10 @@ describe("CalendarQR - Default Schedules", () => {
     DEFAULT_SCHEDULES.forEach((item) => {
       const url = toGoogleCalendarUrl(item);
       expect(url).toContain("https://calendar.google.com/calendar/render");
+      // Verify no Z suffix in dates
+      const urlObj = new URL(url);
+      const dates = urlObj.searchParams.get("dates") || "";
+      expect(dates).not.toContain("Z");
     });
   });
 
