@@ -10,7 +10,8 @@ import {
   Sparkles,
   Image,
   QrCode,
-  PenTool
+  PenTool,
+  Stethoscope
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -184,6 +185,14 @@ export default function AppHome() {
       icon: <QrCode className="h-6 w-6 text-primary" />,
       isLocked: false,
       path: "/app/calendar-qr",
+    },
+    {
+      id: "shozai-doctor",
+      title: "商材ドクター",
+      description: "営業資料をAIが分析・診断。契約リスクや相場との乖離をチェックします",
+      icon: <Stethoscope className="h-6 w-6 text-primary" />,
+      isLocked: false,
+      path: "/app/shozai-doctor",
     },
   ];
 

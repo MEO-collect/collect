@@ -10,6 +10,7 @@ import { TRPCError } from "@trpc/server";
 import { voiceRouter } from "./routers/voice";
 import { imageRouter } from "./routers/image";
 import { bizwriterRouter } from "./routers/bizwriter";
+import { shozaiRouter } from "./routers/shozai";
 
 export const appRouter = router({
   system: systemRouter,
@@ -364,6 +365,9 @@ export const appRouter = router({
 
   // BizWriter AI router
   bizwriter: bizwriterRouter,
+
+  // 商材ドクター router
+  shozai: shozaiRouter,
 });
 
 export type AppRouter = typeof appRouter;

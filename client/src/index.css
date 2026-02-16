@@ -379,3 +379,10 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* 商材ドクター ローディングアニメーション */
+@keyframes loading {
+  0% { width: 0%; }
+  50% { width: 70%; }
+  100% { width: 100%; }
+}
