@@ -13,6 +13,9 @@ import AppHome from "./pages/AppHome";
 import Settings from "./pages/Settings";
 import ProjectList from "./pages/VoiceApp/ProjectList";
 import ProjectDetail from "./pages/VoiceApp/ProjectDetail";
+import ImageHome from "./pages/ImageApp/ImageHome";
+import PhotoEditor from "./pages/ImageApp/PhotoEditor";
+import MagicEraser from "./pages/ImageApp/MagicEraser";
 
 function Router() {
   return (
@@ -33,6 +36,11 @@ function Router() {
       {/* Voice App routes */}
       <Route path="/app/voice" component={ProjectList} />
       <Route path="/app/voice/:id" component={ProjectDetail} />
+      
+      {/* Image App routes */}
+      <Route path="/app/image" component={ImageHome} />
+      <Route path="/app/image/editor" component={PhotoEditor} />
+      <Route path="/app/image/eraser" component={MagicEraser} />
       
       {/* Fallback */}
       <Route path="/404" component={NotFound} />

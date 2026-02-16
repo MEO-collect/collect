@@ -8,6 +8,7 @@ import { getStripe } from "./stripe/client";
 import { SUBSCRIPTION_PLAN, calculateCancellationFee, isInInitialPeriod } from "./stripe/products";
 import { TRPCError } from "@trpc/server";
 import { voiceRouter } from "./routers/voice";
+import { imageRouter } from "./routers/image";
 
 export const appRouter = router({
   system: systemRouter,
@@ -356,6 +357,9 @@ export const appRouter = router({
 
   // Voice transcription router
   voice: voiceRouter,
+
+  // Image editing router
+  image: imageRouter,
 });
 
 export type AppRouter = typeof appRouter;

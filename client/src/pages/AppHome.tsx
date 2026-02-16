@@ -183,11 +183,12 @@ export default function AppHome() {
       isLocked: true,
     },
     {
-      id: "image-generation",
-      title: "画像生成",
-      description: "テキストから高品質な画像をAIで生成します",
+      id: "image-editor",
+      title: "AI画像加工",
+      description: "AIで写真を美しく加工。フォトエディター＆マジック消しゴムで、プロ級の画像編集を実現します",
       icon: <Image className="h-6 w-6 text-primary" />,
-      isLocked: true,
+      isLocked: false,
+      path: "/app/image",
     },
   ];
 
