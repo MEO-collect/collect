@@ -16,6 +16,7 @@ import ProjectDetail from "./pages/VoiceApp/ProjectDetail";
 import ImageHome from "./pages/ImageApp/ImageHome";
 import PhotoEditor from "./pages/ImageApp/PhotoEditor";
 import MagicEraser from "./pages/ImageApp/MagicEraser";
+import CalendarQRApp from "./pages/CalendarQR/CalendarQRApp";
 
 function Router() {
   return (
@@ -41,6 +42,9 @@ function Router() {
       <Route path="/app/image" component={ImageHome} />
       <Route path="/app/image/editor" component={PhotoEditor} />
       <Route path="/app/image/eraser" component={MagicEraser} />
+      
+      {/* Calendar QR App routes */}
+      <Route path="/app/calendar-qr" component={CalendarQRApp} />
       
       {/* Fallback */}
       <Route path="/404" component={NotFound} />

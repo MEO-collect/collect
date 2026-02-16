@@ -11,7 +11,8 @@ import {
   Sparkles,
   MessageSquare,
   BarChart3,
-  Image
+  Image,
+  QrCode
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -189,6 +190,14 @@ export default function AppHome() {
       icon: <Image className="h-6 w-6 text-primary" />,
       isLocked: false,
       path: "/app/image",
+    },
+    {
+      id: "calendar-qr",
+      title: "カレンダーQRコード",
+      description: "予定を選ぶだけでGoogleカレンダーやiPhoneカレンダーに登録できるQRコードを生成します",
+      icon: <QrCode className="h-6 w-6 text-primary" />,
+      isLocked: false,
+      path: "/app/calendar-qr",
     },
   ];
 
