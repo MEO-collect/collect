@@ -2,15 +2,12 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { 
-  FileText, 
   Loader2, 
   Lock, 
   LogOut, 
   Mic, 
   Settings, 
   Sparkles,
-  MessageSquare,
-  BarChart3,
   Image,
   QrCode,
   PenTool
@@ -171,27 +168,7 @@ export default function AppHome() {
       isLocked: false,
       path: "/app/bizwriter",
     },
-    {
-      id: "document-analysis",
-      title: "ドキュメント分析",
-      description: "PDFや文書ファイルをAIで分析し、要約や質問応答を行います",
-      icon: <FileText className="h-6 w-6 text-primary" />,
-      isLocked: true,
-    },
-    {
-      id: "chat-assistant",
-      title: "AIチャットアシスタント",
-      description: "ビジネスに特化したAIチャットボットで業務をサポートします",
-      icon: <MessageSquare className="h-6 w-6 text-primary" />,
-      isLocked: true,
-    },
-    {
-      id: "data-analysis",
-      title: "データ分析",
-      description: "Excelやデータをアップロードして、AIで分析・可視化します",
-      icon: <BarChart3 className="h-6 w-6 text-primary" />,
-      isLocked: true,
-    },
+
     {
       id: "image-editor",
       title: "AI画像加工",
