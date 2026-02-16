@@ -95,6 +95,31 @@ export default function PhotoEditor() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Resize image to max dimension and compress as JPEG
+  const resizeImage = useCallback((dataUrl: string, maxDim: number = 1536): Promise<{ base64: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas context failed")); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ base64: compressed.split(",")[1], mimeType: "image/jpeg" });
+      };
+      img.onerror = () => reject(new Error("Image load failed"));
+      img.src = dataUrl;
+    });
+  }, []);
+
   const editMutation = trpc.image.editPhoto.useMutation({
     onSuccess: (data) => {
       setGeneratedImages(data.images);
@@ -150,18 +175,22 @@ export default function PhotoEditor() {
     [handleFileSelect]
   );
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!originalImage) {
       toast.error("画像をアップロードしてください");
       return;
     }
-    // Extract base64 data from data URL
-    const base64Data = originalImage.split(",")[1];
-    editMutation.mutate({
-      imageBase64: base64Data,
-      imageMimeType: originalMimeType,
-      ...params,
-    });
+    try {
+      // Resize and compress image before sending
+      const { base64, mimeType } = await resizeImage(originalImage);
+      editMutation.mutate({
+        imageBase64: base64,
+        imageMimeType: mimeType,
+        ...params,
+      });
+    } catch {
+      toast.error("画像の処理に失敗しました");
+    }
   };
 
   const handleDownload = async (url: string, index: number) => {

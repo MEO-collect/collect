@@ -138,3 +138,4 @@
 ## バグ修正
 - [x] Gemini APIモデル名エラー修正（gemini-2.0-flash-exp → gemini-2.5-flash-imageに変更）
 - [x] Gemini APIレスポンスのpartsがundefinedエラーを修正（レスポンス構造の安全なパース）
+- [x] 画像アップロード時のペイロードサイズ超過エラー修正（Base64画像のリサイズ処理追加）

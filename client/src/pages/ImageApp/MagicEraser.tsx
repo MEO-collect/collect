@@ -249,13 +249,26 @@ export default function MagicEraser() {
     tempCtx.putImageData(overlayData, 0, 0);
     ctx.drawImage(tempCanvas, 0, 0);
 
-    // Convert to base64
-    const dataUrl = mergeCanvas.toDataURL("image/png");
+    // Resize merged canvas to max 1536px and compress as JPEG
+    const maxDim = 1536;
+    let outW = mergeCanvas.width;
+    let outH = mergeCanvas.height;
+    if (outW > maxDim || outH > maxDim) {
+      const ratio = Math.min(maxDim / outW, maxDim / outH);
+      outW = Math.round(outW * ratio);
+      outH = Math.round(outH * ratio);
+    }
+    const resizeCanvas = document.createElement("canvas");
+    resizeCanvas.width = outW;
+    resizeCanvas.height = outH;
+    const resizeCtx = resizeCanvas.getContext("2d")!;
+    resizeCtx.drawImage(mergeCanvas, 0, 0, outW, outH);
+    const dataUrl = resizeCanvas.toDataURL("image/jpeg", 0.85);
     const base64Data = dataUrl.split(",")[1];
 
     eraserMutation.mutate({
       imageBase64: base64Data,
-      imageMimeType: "image/png",
+      imageMimeType: "image/jpeg",
     });
   };
 
