@@ -12,7 +12,8 @@ import {
   MessageSquare,
   BarChart3,
   Image,
-  QrCode
+  QrCode,
+  PenTool
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -161,6 +162,14 @@ export default function AppHome() {
       icon: <Mic className="h-6 w-6 text-primary" />,
       isLocked: false,
       path: "/app/voice",
+    },
+    {
+      id: "bizwriter",
+      title: "BizWriter AI",
+      description: "SNS・ブログ・MEO用の文章をAIで自動生成。Instagram、LINE、ブログ、GBPに対応",
+      icon: <PenTool className="h-6 w-6 text-primary" />,
+      isLocked: false,
+      path: "/app/bizwriter",
     },
     {
       id: "document-analysis",

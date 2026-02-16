@@ -17,6 +17,7 @@ import ImageHome from "./pages/ImageApp/ImageHome";
 import PhotoEditor from "./pages/ImageApp/PhotoEditor";
 import MagicEraser from "./pages/ImageApp/MagicEraser";
 import CalendarQRApp from "./pages/CalendarQR/CalendarQRApp";
+import BizWriterApp from "./pages/BizWriter/BizWriterApp";
 
 function Router() {
   return (
@@ -45,6 +46,9 @@ function Router() {
       
       {/* Calendar QR App routes */}
       <Route path="/app/calendar-qr" component={CalendarQRApp} />
+      
+      {/* BizWriter AI routes */}
+      <Route path="/app/bizwriter" component={BizWriterApp} />
       
       {/* Fallback */}
       <Route path="/404" component={NotFound} />

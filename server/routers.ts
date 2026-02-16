@@ -9,6 +9,7 @@ import { SUBSCRIPTION_PLAN, calculateCancellationFee, isInInitialPeriod } from "
 import { TRPCError } from "@trpc/server";
 import { voiceRouter } from "./routers/voice";
 import { imageRouter } from "./routers/image";
+import { bizwriterRouter } from "./routers/bizwriter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -360,6 +361,9 @@ export const appRouter = router({
 
   // Image editing router
   image: imageRouter,
+
+  // BizWriter AI router
+  bizwriter: bizwriterRouter,
 });
 
 export type AppRouter = typeof appRouter;

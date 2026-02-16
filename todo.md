@@ -161,3 +161,21 @@
 - [x] QRコード生成ロジックの時間対応修正（Google/iCalendar両方）
 - [x] QRコード表示ダイアログの時間表示を動的に変更
 - [x] ユニットテストの更新（70テスト合格）
+
+## BizWriter AI（SNS・ブログ・MEO文章自動生成アプリ）
+- [x] 型定義（Industry, Tone, OutputFormat, StoreProfile, GenerationRequest等）
+- [x] サーバーサイド: Gemini API連携（コンテンツ生成・店舗情報抽出）
+- [x] サーバーサイド: tRPCルーター（生成・プロフィール抽出エンドポイント）
+- [x] BizWriterApp メインレイアウト（ボトムナビ/ヘッダーナビ切り替え）
+- [x] ProfileScreen（店舗プロフィール設定・Googleマップ自動入力・http→https変換）
+- [x] GeneratorScreen（お題入力・出力形式選択・文字数バリデーション・オプション設定）
+- [x] ResultCard（媒体別テーマカラー・警告表示・コピー機能・ハッシュタグ表示）
+- [x] TemplateScreen（媒体別定型文管理・タブ切り替え）
+- [x] HistoryScreen（生成履歴・アコーディオン表示）
+- [x] LocalStorage永続化（プロフィール・履歴・テンプレート）
+- [x] コンプライアンス対応（医療広告ガイドライン・景品表示法・GBPポリシー）
+- [x] 文字数制限（LINE:500/Instagram:2200/GBP:1500のハードリミット）
+- [x] レスポンシブデザイン（SP: ボトムナビ・片手操作、PC: 2カラム・max-w-4xl）
+- [x] AppHomeへの統合（AIアプリカードとして追加）
+- [x] ルーティング設定（/app/bizwriter）
+- [x] ユニットテスト（39テスト合格、全109テスト合格）
