@@ -123,7 +123,7 @@ export default function BizWriterApp() {
             </Button>
             <div className="flex items-center gap-2">
               <PenTool className="h-5 w-5 text-primary" />
-              <span className="font-semibold text-base">BizWriter AI</span>
+              <span className="font-semibold text-base">AI文章作成</span>
             </div>
           </div>
 

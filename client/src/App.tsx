@@ -48,7 +48,7 @@ function Router() {
       {/* Calendar QR App routes */}
       <Route path="/app/calendar-qr" component={CalendarQRApp} />
       
-      {/* BizWriter AI routes */}
+      {/* AI文章作成 routes */}
       <Route path="/app/bizwriter" component={BizWriterApp} />
       
       {/* 商材ドクター routes */}

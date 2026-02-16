@@ -163,7 +163,7 @@ export default function AppHome() {
     },
     {
       id: "bizwriter",
-      title: "BizWriter AI",
+      title: "AI文章作成",
       description: "SNS・ブログ・MEO用の文章をAIで自動生成。Instagram、LINE、ブログ、GBPに対応",
       icon: <PenTool className="h-6 w-6 text-primary" />,
       isLocked: false,

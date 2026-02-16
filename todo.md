@@ -198,3 +198,6 @@
 - [x] AppHomeへの統合（AIアプリカードとして追加）
 - [x] ルーティング設定（/app/shozai-doctor）
 - [x] ユニットテスト（27テスト合格、全136テスト合格）
+
+## アプリ名変更
+- [x] BizWriter AIのアプリ名を「AI文章作成」に変更（AppHome・BizWriterApp内・App.tsx）
