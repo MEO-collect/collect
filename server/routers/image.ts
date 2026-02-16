@@ -34,6 +34,7 @@ interface GeminiCandidate {
 interface GeminiResponse {
   candidates?: GeminiCandidate[];
   error?: { message: string; code: number };
+  promptFeedback?: { blockReason?: string; safetyRatings?: unknown[] };
 }
 
 async function callGeminiImageEdit(
@@ -109,8 +110,27 @@ async function callGeminiImageEdit(
         continue;
       }
 
+      // Log response structure for debugging
+      console.log(`[ImageEdit] Response candidates count:`, result.candidates?.length ?? 0);
       if (result.candidates && result.candidates.length > 0) {
-        const parts = result.candidates[0].content.parts;
+        const candidate = result.candidates[0];
+        
+        // Check for safety/content filtering
+        if (candidate.finishReason && candidate.finishReason !== "STOP" && candidate.finishReason !== "MAX_TOKENS") {
+          console.warn(`[ImageEdit] Candidate finish reason: ${candidate.finishReason}`);
+        }
+        
+        // Safely access content.parts
+        const parts = candidate.content?.parts;
+        if (!parts || parts.length === 0) {
+          console.warn(`[ImageEdit] No parts in candidate response. Full candidate:`, JSON.stringify(candidate).substring(0, 500));
+          if (i === 0 && generatedImages.length === 0) {
+            const reason = candidate.finishReason || "unknown";
+            throw new Error(`画像の生成に失敗しました（理由: ${reason}）。別の設定でお試しください。`);
+          }
+          continue;
+        }
+        
         for (const part of parts) {
           if (part.inlineData) {
             // Upload to S3
@@ -126,6 +146,11 @@ async function callGeminiImageEdit(
           } else if (part.text && !textResponse) {
             textResponse = part.text;
           }
+        }
+      } else {
+        console.warn(`[ImageEdit] No candidates in response. Full response keys:`, Object.keys(result));
+        if (result.promptFeedback) {
+          console.warn(`[ImageEdit] Prompt feedback:`, JSON.stringify(result.promptFeedback));
         }
       }
     } catch (err) {
