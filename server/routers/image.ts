@@ -5,7 +5,7 @@ import { ENV } from "../_core/env";
 
 /**
  * Gemini 画像生成・編集 API ヘルパー
- * gemini-2.5-flash-preview-05-20 を使用して画像編集を行う
+ * gemini-2.5-flash-image を使用して画像編集を行う
  */
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -47,7 +47,7 @@ async function callGeminiImageEdit(
     throw new Error("GEMINI_API_KEY is not configured");
   }
 
-  const model = "gemini-2.0-flash-exp";
+  const model = "gemini-2.5-flash-image";
   const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
 
   const contents: GeminiContent[] = [
