@@ -4,19 +4,10 @@ import { getStripe } from "./client";
 import { ENV } from "../_core/env";
 import { getSubscriptionByStripeSubscriptionId, updateSubscriptionByStripeId, getSubscriptionByStripeCustomerId, updateSubscription, createSubscription, getSubscription } from "../db";
 import { SUBSCRIPTION_PLAN } from "./products";
-
-// Extended types for Stripe objects with additional properties
-interface StripeSubscriptionExtended {
-  id: string;
-  start_date: number;
-  current_period_end: number;
-  status: string;
-  canceled_at: number | null;
-  customer?: string | { id: string };
-}
+import { extractSubData, subDataToDbFields } from "./helpers";
 
 /**
- * Helper: Calculate initial period end date from start date
+ * Helper: Calculate initial period end date from start date (ms)
  */
 function calcInitialPeriodEnd(startedAt: number): number {
   return startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
@@ -85,26 +76,22 @@ async function findExistingSubscription(
 }
 
 /**
- * Helper: Activate subscription in database
+ * Helper: Activate subscription in database using safe extraction
  */
 async function activateSubscription(
   userId: number,
   stripeSubscriptionId: string,
   customerId: string | null,
-  stripeSub: StripeSubscriptionExtended,
+  stripeSubRaw: any,
   existingCustomerId?: string | null,
 ) {
-  const startedAt = stripeSub.start_date * 1000;
-  const initialPeriodEndsAt = calcInitialPeriodEnd(startedAt);
+  const subData = extractSubData(stripeSubRaw);
+  const dbFields = subDataToDbFields(subData);
 
   await updateSubscription(userId, {
     stripeCustomerId: customerId || existingCustomerId || undefined,
-    stripeSubscriptionId,
+    ...dbFields,
     status: "active",
-    startedAt,
-    initialPeriodEndsAt,
-    isInInitialPeriod: true,
-    currentPeriodEnd: stripeSub.current_period_end * 1000,
   });
 
   console.log(`[Webhook] Subscription activated for user ${userId} (sub: ${stripeSubscriptionId})`);
@@ -169,13 +156,13 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
           // Get subscription details from Stripe
           const stripeSubResponse = await stripe.subscriptions.retrieve(subscriptionId);
-          const stripeSub = stripeSubResponse as unknown as StripeSubscriptionExtended;
+          const subData = extractSubData(stripeSubResponse);
 
           console.log("[Webhook] Stripe subscription details:", {
-            id: stripeSub.id,
-            status: stripeSub.status,
-            startDate: new Date(stripeSub.start_date * 1000).toISOString(),
-            currentPeriodEnd: new Date(stripeSub.current_period_end * 1000).toISOString(),
+            id: subData.id,
+            status: subData.status,
+            startDate: new Date(subData.startDate * 1000).toISOString(),
+            currentPeriodEnd: new Date(subData.currentPeriodEnd * 1000).toISOString(),
           });
 
           // Find existing subscription
@@ -191,7 +178,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
               existingSub.userId,
               subscriptionId,
               customerId,
-              stripeSub,
+              stripeSubResponse,
               existingSub.stripeCustomerId,
             );
           } else {
@@ -201,19 +188,14 @@ export async function handleStripeWebhook(req: Request, res: Response) {
               : (session.metadata?.user_id ? parseInt(session.metadata.user_id, 10) : null);
 
             if (userId && !isNaN(userId)) {
-              const startedAt = stripeSub.start_date * 1000;
-              const initialPeriodEndsAt = calcInitialPeriodEnd(startedAt);
+              const dbFields = subDataToDbFields(subData);
 
               try {
                 await createSubscription({
                   userId,
                   stripeCustomerId: customerId || undefined,
-                  stripeSubscriptionId: subscriptionId,
+                  ...dbFields,
                   status: "active",
-                  startedAt,
-                  initialPeriodEndsAt,
-                  isInInitialPeriod: true,
-                  currentPeriodEnd: stripeSub.current_period_end * 1000,
                 });
                 console.log("[Webhook] New subscription created for user:", userId);
               } catch (createError) {
@@ -221,12 +203,8 @@ export async function handleStripeWebhook(req: Request, res: Response) {
                 console.warn("[Webhook] Create failed (likely duplicate), updating instead:", createError);
                 await updateSubscription(userId, {
                   stripeCustomerId: customerId || undefined,
-                  stripeSubscriptionId: subscriptionId,
+                  ...dbFields,
                   status: "active",
-                  startedAt,
-                  initialPeriodEndsAt,
-                  isInInitialPeriod: true,
-                  currentPeriodEnd: stripeSub.current_period_end * 1000,
                 });
               }
             } else {
@@ -245,12 +223,13 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
       // ─── SUBSCRIPTION CREATED ───
       case "customer.subscription.created": {
-        const subEvent = event.data.object as unknown as StripeSubscriptionExtended;
-        const customerId = extractCustomerId(subEvent.customer);
+        const subEventRaw = event.data.object;
+        const subData = extractSubData(subEventRaw);
+        const customerId = extractCustomerId((subEventRaw as any).customer);
 
         console.log("[Webhook] customer.subscription.created:", {
-          id: subEvent.id,
-          status: subEvent.status,
+          id: subData.id,
+          status: subData.status,
           customerId,
         });
 
@@ -258,23 +237,16 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           const existingSub = await getSubscriptionByStripeCustomerId(customerId);
           if (existingSub) {
             // Always update the stripeSubscriptionId regardless of status
-            // This ensures the DB record is linked to the Stripe subscription
             const updates: Record<string, unknown> = {
-              stripeSubscriptionId: subEvent.id,
+              stripeSubscriptionId: subData.id,
             };
 
-            if (subEvent.status === "active" || subEvent.status === "trialing") {
-              const startedAt = subEvent.start_date * 1000;
-              Object.assign(updates, {
-                status: "active",
-                startedAt,
-                initialPeriodEndsAt: calcInitialPeriodEnd(startedAt),
-                isInInitialPeriod: true,
-                currentPeriodEnd: subEvent.current_period_end * 1000,
-              });
+            if (subData.status === "active" || subData.status === "trialing") {
+              const dbFields = subDataToDbFields(subData);
+              Object.assign(updates, dbFields, { status: "active" });
               console.log("[Webhook] Subscription created with active/trialing status, activating");
             } else {
-              console.log("[Webhook] Subscription created with status:", subEvent.status, "- linking ID only");
+              console.log("[Webhook] Subscription created with status:", subData.status, "- linking ID only");
             }
 
             await updateSubscription(existingSub.userId, updates as any);
@@ -287,17 +259,18 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
       // ─── SUBSCRIPTION UPDATED ───
       case "customer.subscription.updated": {
-        const subEvent = event.data.object as unknown as StripeSubscriptionExtended;
-        const customerId = extractCustomerId(subEvent.customer);
+        const subEventRaw = event.data.object;
+        const subData = extractSubData(subEventRaw);
+        const customerId = extractCustomerId((subEventRaw as any).customer);
 
         console.log("[Webhook] customer.subscription.updated:", {
-          id: subEvent.id,
-          status: subEvent.status,
-          canceledAt: subEvent.canceled_at,
+          id: subData.id,
+          status: subData.status,
+          canceledAt: subData.canceledAt,
         });
 
         // Try to find by subscription ID first, then by customer ID
-        let existingSub = await getSubscriptionByStripeSubscriptionId(subEvent.id);
+        let existingSub = await getSubscriptionByStripeSubscriptionId(subData.id);
         
         if (!existingSub && customerId) {
           existingSub = await getSubscriptionByStripeCustomerId(customerId);
@@ -308,37 +281,38 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
         if (existingSub) {
           const updates: Record<string, unknown> = {
-            stripeSubscriptionId: subEvent.id,
-            status: subEvent.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
-            currentPeriodEnd: subEvent.current_period_end * 1000,
+            stripeSubscriptionId: subData.id,
+            status: subData.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
+            currentPeriodEnd: subData.currentPeriodEnd * 1000,
           };
 
-          if (subEvent.canceled_at) {
-            updates.canceledAt = subEvent.canceled_at * 1000;
+          if (subData.canceledAt) {
+            updates.canceledAt = subData.canceledAt * 1000;
           }
 
           // If transitioning to active, also set startedAt if not already set
-          if (subEvent.status === "active" && !existingSub.startedAt) {
-            const startedAt = subEvent.start_date * 1000;
+          if (subData.status === "active" && !existingSub.startedAt) {
+            const startedAt = subData.startDate * 1000;
             updates.startedAt = startedAt;
             updates.initialPeriodEndsAt = calcInitialPeriodEnd(startedAt);
             updates.isInInitialPeriod = true;
           }
 
           await updateSubscription(existingSub.userId, updates as any);
-          console.log("[Webhook] Subscription updated for user:", existingSub.userId, "→", subEvent.status);
+          console.log("[Webhook] Subscription updated for user:", existingSub.userId, "→", subData.status);
         } else {
-          console.warn("[Webhook] No subscription found for update:", subEvent.id);
+          console.warn("[Webhook] No subscription found for update:", subData.id);
         }
         break;
       }
 
       // ─── SUBSCRIPTION DELETED ───
       case "customer.subscription.deleted": {
-        const subEvent = event.data.object as unknown as StripeSubscriptionExtended;
-        console.log("[Webhook] customer.subscription.deleted:", subEvent.id);
+        const subEventRaw = event.data.object;
+        const subData = extractSubData(subEventRaw);
+        console.log("[Webhook] customer.subscription.deleted:", subData.id);
 
-        const existingSub = await getSubscriptionByStripeSubscriptionId(subEvent.id);
+        const existingSub = await getSubscriptionByStripeSubscriptionId(subData.id);
         if (existingSub) {
           await updateSubscription(existingSub.userId, {
             status: "canceled",
@@ -347,7 +321,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           console.log("[Webhook] Subscription canceled for user:", existingSub.userId);
         } else {
           // Try by customer ID
-          const customerId = extractCustomerId(subEvent.customer);
+          const customerId = extractCustomerId((subEventRaw as any).customer);
           if (customerId) {
             const sub = await getSubscriptionByStripeCustomerId(customerId);
             if (sub) {
@@ -392,18 +366,17 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           if (existingSub && existingSub.status !== "active") {
             // Get fresh subscription data from Stripe
             try {
-              const stripeSub = await stripe.subscriptions.retrieve(subscriptionId) as unknown as StripeSubscriptionExtended;
-              const startedAt = stripeSub.start_date * 1000;
+              const stripeSubResponse = await stripe.subscriptions.retrieve(subscriptionId);
+              const subData = extractSubData(stripeSubResponse);
+              const dbFields = subDataToDbFields(subData);
 
               await updateSubscription(existingSub.userId, {
-                stripeSubscriptionId: subscriptionId,
+                ...dbFields,
                 status: "active",
-                startedAt: existingSub.startedAt || startedAt,
+                startedAt: existingSub.startedAt || dbFields.startedAt,
                 initialPeriodEndsAt: existingSub.startedAt 
                   ? calcInitialPeriodEnd(existingSub.startedAt) 
-                  : calcInitialPeriodEnd(startedAt),
-                isInInitialPeriod: true,
-                currentPeriodEnd: stripeSub.current_period_end * 1000,
+                  : dbFields.initialPeriodEndsAt,
               });
               console.log("[Webhook] Subscription activated after invoice.paid for user:", existingSub.userId);
             } catch (err) {

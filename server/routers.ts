@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getMemberProfile, upsertMemberProfile, getSubscription, createSubscription, updateSubscription, deleteSubscription, getAllSubscriptionsWithUsers } from "./db";
 import { getStripe } from "./stripe/client";
 import { SUBSCRIPTION_PLAN, calculateCancellationFee, isInInitialPeriod } from "./stripe/products";
+import { extractSubData, subDataToDbFields } from "./stripe/helpers";
 import { TRPCError } from "@trpc/server";
 import { voiceRouter } from "./routers/voice";
 import { imageRouter } from "./routers/image";
@@ -109,20 +110,15 @@ export const appRouter = router({
 
               // Get subscription details from Stripe
               const stripeSubResponse = await stripe.subscriptions.retrieve(subscriptionId);
-              const stripeSub = stripeSubResponse as unknown as { id: string; start_date: number; current_period_end: number; status: string };
-              const startedAt = stripeSub.start_date * 1000;
-              const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+              const subData = extractSubData(stripeSubResponse);
+              const dbFields = subDataToDbFields(subData);
 
               if (existing) {
                 // Update existing subscription
                 await updateSubscription(userId, {
                   stripeCustomerId: customerId || existing.stripeCustomerId,
-                  stripeSubscriptionId: subscriptionId,
+                  ...dbFields,
                   status: "active",
-                  startedAt,
-                  initialPeriodEndsAt,
-                  isInInitialPeriod: true,
-                  currentPeriodEnd: stripeSub.current_period_end * 1000,
                 });
                 console.log("[VerifySession] Updated subscription for user:", userId);
               } else {
@@ -131,24 +127,16 @@ export const appRouter = router({
                   await createSubscription({
                     userId,
                     stripeCustomerId: customerId || undefined,
-                    stripeSubscriptionId: subscriptionId,
+                    ...dbFields,
                     status: "active",
-                    startedAt,
-                    initialPeriodEndsAt,
-                    isInInitialPeriod: true,
-                    currentPeriodEnd: stripeSub.current_period_end * 1000,
                   });
                   console.log("[VerifySession] Created new subscription for user:", userId);
                 } catch (createError) {
                   // If duplicate key, update instead
                   await updateSubscription(userId, {
                     stripeCustomerId: customerId || undefined,
-                    stripeSubscriptionId: subscriptionId,
+                    ...dbFields,
                     status: "active",
-                    startedAt,
-                    initialPeriodEndsAt,
-                    isInInitialPeriod: true,
-                    currentPeriodEnd: stripeSub.current_period_end * 1000,
                   });
                   console.log("[VerifySession] Updated subscription after create failure for user:", userId);
                 }
@@ -175,20 +163,12 @@ export const appRouter = router({
               || customerSubs.data.find(s => s.status !== "canceled" && s.status !== "incomplete_expired");
 
             if (activeSub) {
-              const stripeSub = activeSub as unknown as { id: string; start_date: number; current_period_end: number; status: string };
-              const startedAt = stripeSub.start_date * 1000;
-              const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+              const subData = extractSubData(activeSub);
+              const dbFields = subDataToDbFields(subData);
 
-              await updateSubscription(userId, {
-                stripeSubscriptionId: stripeSub.id,
-                status: stripeSub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
-                startedAt,
-                initialPeriodEndsAt,
-                isInInitialPeriod: true,
-                currentPeriodEnd: stripeSub.current_period_end * 1000,
-              });
-              console.log("[VerifySession] Synced subscription from Stripe customer for user:", userId, "status:", stripeSub.status);
-              return { status: stripeSub.status, synced: true };
+              await updateSubscription(userId, dbFields);
+              console.log("[VerifySession] Synced subscription from Stripe customer for user:", userId, "status:", subData.status);
+              return { status: subData.status, synced: true };
             }
           } catch (err) {
             console.error("[VerifySession] Error checking Stripe customer:", err);
@@ -236,24 +216,16 @@ export const appRouter = router({
           || customerSubs.data.find(s => s.status === "trialing")
           || customerSubs.data[0]; // fallback to most recent
 
-        const stripeSub = activeSub as unknown as { id: string; start_date: number; current_period_end: number; status: string };
-        const startedAt = stripeSub.start_date * 1000;
-        const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+        const subData = extractSubData(activeSub);
+        const dbFields = subDataToDbFields(subData);
 
-        await updateSubscription(userId, {
-          stripeSubscriptionId: stripeSub.id,
-          status: stripeSub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
-          startedAt,
-          initialPeriodEndsAt,
-          isInInitialPeriod: true,
-          currentPeriodEnd: stripeSub.current_period_end * 1000,
-        });
+        await updateSubscription(userId, dbFields);
 
-        console.log("[SyncFromStripe] Updated subscription for user:", userId, "status:", stripeSub.status);
+        console.log("[SyncFromStripe] Updated subscription for user:", userId, "status:", subData.status);
         return { 
-          status: stripeSub.status, 
+          status: subData.status, 
           synced: true, 
-          message: `Stripeから同期しました（ステータス: ${stripeSub.status}）`,
+          message: `Stripeから同期しました（ステータス: ${subData.status}）`,
           stripeSubscriptions: customerSubs.data.length,
         };
       } catch (err) {
@@ -312,20 +284,15 @@ export const appRouter = router({
             
             if (existingSubs.data.length > 0) {
               // There's already an active subscription in Stripe - sync it
-              const stripeSub = existingSubs.data[0] as unknown as { id: string; start_date: number; current_period_end: number; status: string };
-              const startedAt = stripeSub.start_date * 1000;
-              const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+              const subData = extractSubData(existingSubs.data[0]);
+              const dbFields = subDataToDbFields(subData);
               
               await updateSubscription(ctx.user.id, {
-                stripeSubscriptionId: stripeSub.id,
+                ...dbFields,
                 status: "active",
-                startedAt,
-                initialPeriodEndsAt,
-                isInInitialPeriod: true,
-                currentPeriodEnd: stripeSub.current_period_end * 1000,
               });
               
-              console.log("[CreateCheckout] Found active subscription in Stripe, synced:", stripeSub.id);
+              console.log("[CreateCheckout] Found active subscription in Stripe, synced:", subData.id);
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "既にアクティブなサブスクリプションがあります。ページを更新してください。",
@@ -534,23 +501,15 @@ export const appRouter = router({
             || customerSubs.data.find(s => s.status === "trialing")
             || customerSubs.data[0];
 
-          const stripeSub = activeSub as unknown as { id: string; start_date: number; current_period_end: number; status: string };
-          const startedAt = stripeSub.start_date * 1000;
-          const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+          const subData = extractSubData(activeSub);
+          const dbFields = subDataToDbFields(subData);
 
-          await updateSubscription(input.userId, {
-            stripeSubscriptionId: stripeSub.id,
-            status: stripeSub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
-            startedAt,
-            initialPeriodEndsAt,
-            isInInitialPeriod: true,
-            currentPeriodEnd: stripeSub.current_period_end * 1000,
-          });
+          await updateSubscription(input.userId, dbFields);
 
           return { 
             success: true, 
-            message: `同期完了: ${stripeSub.status}`,
-            stripeStatus: stripeSub.status,
+            message: `同期完了: ${subData.status}`,
+            stripeStatus: subData.status,
           };
         } catch (err) {
           console.error("[AdminSync] Error:", err);
