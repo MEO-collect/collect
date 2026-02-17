@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { subscribedProcedure, router } from "../_core/trpc";
 import { storagePut } from "../storage";
 import { ENV } from "../_core/env";
 
@@ -284,7 +284,7 @@ export const imageRouter = router({
   /**
    * フォトエディター: 画像を編集パラメータに基づいて加工
    */
-  editPhoto: protectedProcedure
+  editPhoto: subscribedProcedure
     .input(z.object({
       imageBase64: z.string().describe("Base64エンコードされた画像データ"),
       imageMimeType: z.string().default("image/jpeg"),
@@ -326,7 +326,7 @@ export const imageRouter = router({
   /**
    * マジック消しゴム: マスク付き画像から物体を消去
    */
-  magicEraser: protectedProcedure
+  magicEraser: subscribedProcedure
     .input(z.object({
       imageBase64: z.string().describe("マスク付きのBase64エンコードされた画像データ"),
       imageMimeType: z.string().default("image/png"),

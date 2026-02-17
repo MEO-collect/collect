@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 
 const SPEAKER_LABELS = ["話者1", "話者2", "話者3", "話者4"];
@@ -12,7 +12,7 @@ function getSpeakerPrompt(speakerCount: number | null): string {
 }
 
 export const voiceRouter = router({
-  transcribe: protectedProcedure
+  transcribe: subscribedProcedure
     .input(z.object({
       audioBase64: z.string(),
       mimeType: z.string().default("audio/webm"),
@@ -76,7 +76,7 @@ export const voiceRouter = router({
       };
     }),
 
-  summarize: protectedProcedure
+  summarize: subscribedProcedure
     .input(z.object({
       transcription: z.string(),
     }))
@@ -123,7 +123,7 @@ export const voiceRouter = router({
       };
     }),
 
-  generateMinutes: protectedProcedure
+  generateMinutes: subscribedProcedure
     .input(z.object({
       transcription: z.string(),
       template: z.enum(["business", "medical", "weekly"]),
@@ -266,7 +266,7 @@ export const voiceRouter = router({
       };
     }),
 
-  generateKarte: protectedProcedure
+  generateKarte: subscribedProcedure
     .input(z.object({
       transcription: z.string(),
       patientInfo: z.object({

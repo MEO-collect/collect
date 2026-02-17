@@ -1,9 +1,21 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Wand2, Eraser, Sparkles } from "lucide-react";
+import { ArrowLeft, Wand2, Eraser, Sparkles, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 
 export default function ImageHome() {
   const [, navigate] = useLocation();
+  const { isLoading: subLoading } = useSubscriptionGuard();
+
+  if (subLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
   const tools = [
     {

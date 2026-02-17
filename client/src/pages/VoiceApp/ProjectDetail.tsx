@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -141,6 +142,7 @@ function extractSpeakers(text: string): string[] {
 
 export default function ProjectDetail() {
   const { loading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: subLoading } = useSubscriptionGuard();
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
   const projectId = params.id;
@@ -447,7 +449,7 @@ export default function ProjectDetail() {
   const tokenTotals = project?.tokenUsage ? getTotalTokens(project.tokenUsage) : { input: 0, output: 0 };
   const tokenCost = project?.tokenUsage ? calculateTokenCost(project.tokenUsage) : 0;
 
-  if (authLoading || !project) {
+  if (authLoading || subLoading || !project) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
         <div className="glass-card p-8">

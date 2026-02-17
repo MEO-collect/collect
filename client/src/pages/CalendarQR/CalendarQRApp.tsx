@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,7 @@ import {
   QrCode,
   Smartphone,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
@@ -682,6 +684,7 @@ function QRCodeDisplay({
 
 // ============ Main Component ============
 export default function CalendarQRApp() {
+  const { isLoading: subLoading } = useSubscriptionGuard();
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
@@ -733,6 +736,16 @@ export default function CalendarQRApp() {
     setDeleteTarget(null);
     toast.success("予定を削除しました");
   };
+
+  if (subLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen gradient-mesh relative overflow-hidden">

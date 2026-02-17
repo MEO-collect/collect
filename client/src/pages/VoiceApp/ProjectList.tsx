@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +68,7 @@ const statusConfig: Record<ProjectStatus, { label: string; color: string; icon: 
 
 export default function ProjectList() {
   const { loading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: subLoading } = useSubscriptionGuard();
   const [, setLocation] = useLocation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -107,7 +109,7 @@ export default function ProjectList() {
     setShowDeleteDialog(true);
   };
 
-  if (authLoading) {
+  if (authLoading || subLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
         <div className="glass-card p-8">

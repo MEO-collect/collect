@@ -11,7 +11,9 @@ import {
   Image,
   QrCode,
   PenTool,
-  Stethoscope
+  Stethoscope,
+  AlertTriangle,
+  CreditCard,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -22,10 +24,11 @@ interface AppCardProps {
   description: string;
   icon: React.ReactNode;
   isLocked?: boolean;
+  lockReason?: string;
   onClick?: () => void;
 }
 
-function AppCard({ title, description, icon, isLocked = false, onClick }: AppCardProps) {
+function AppCard({ title, description, icon, isLocked = false, lockReason, onClick }: AppCardProps) {
   return (
     <div 
       className={`relative overflow-hidden glass-card p-6 ${
@@ -36,12 +39,12 @@ function AppCard({ title, description, icon, isLocked = false, onClick }: AppCar
       onClick={isLocked ? undefined : onClick}
     >
       {isLocked && (
-        <div className="absolute inset-0 bg-background/30 backdrop-blur-[2px] z-10 flex items-center justify-center">
+        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-10 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 backdrop-blur-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/80">
               <Lock className="h-5 w-5" />
             </div>
-            <span className="text-xs font-medium">Coming Soon</span>
+            <span className="text-xs font-medium text-center px-4 bg-background/80 rounded-full py-1 px-3">{lockReason || "利用不可"}</span>
           </div>
         </div>
       )}
@@ -65,7 +68,9 @@ function AppCard({ title, description, icon, isLocked = false, onClick }: AppCar
  * - ログイン済み＋サブスクリプションあり＋プロファイルなし → /register
  * - ログイン済み＋サブスクリプションあり＋プロファイルあり → このページを表示
  * 
- * URLパラメータには一切依存しない。
+ * サブスクリプションがアクティブでない場合：
+ * - アプリカードはロック表示（利用不可）
+ * - 上部に案内バナーを表示
  */
 export default function AppHome() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
@@ -152,13 +157,60 @@ export default function AppHome() {
     );
   }
 
+  // サブスクリプションがアクティブかどうか
+  const isSubscriptionActive = subscription.status === "active";
+
+  // ステータスに応じた日本語表示とメッセージ
+  const getStatusInfo = () => {
+    switch (subscription.status) {
+      case "active":
+        return { label: "有効", color: "text-emerald-600", message: "" };
+      case "incomplete":
+        return { 
+          label: "決済未完了", 
+          color: "text-amber-600", 
+          message: "サブスクリプションの決済が完了していません。決済を完了してアプリをご利用ください。" 
+        };
+      case "past_due":
+        return { 
+          label: "支払い遅延", 
+          color: "text-red-600", 
+          message: "お支払いが遅延しています。設定画面からお支払い情報を更新してください。" 
+        };
+      case "canceled":
+        return { 
+          label: "解約済み", 
+          color: "text-gray-500", 
+          message: "サブスクリプションが解約されています。再度ご利用いただくには新しいプランにお申し込みください。" 
+        };
+      case "unpaid":
+        return { 
+          label: "未払い", 
+          color: "text-red-600", 
+          message: "お支払いが確認できません。設定画面からお支払い情報を更新してください。" 
+        };
+      default:
+        return { 
+          label: subscription.status, 
+          color: "text-amber-600", 
+          message: "サブスクリプションの状態を確認してください。" 
+        };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+
+  const lockReason = !isSubscriptionActive 
+    ? "サブスクリプションが有効ではありません" 
+    : undefined;
+
   const apps = [
     {
       id: "voice-transcription",
       title: "音声録音＆書き起こし＆要約",
       description: "音声を録音し、AIで書き起こし・要約・議事録・カルテを自動生成します",
       icon: <Mic className="h-6 w-6 text-primary" />,
-      isLocked: false,
+      isLocked: !isSubscriptionActive,
       path: "/app/voice",
     },
     {
@@ -166,16 +218,15 @@ export default function AppHome() {
       title: "AI文章作成",
       description: "SNS・ブログ・MEO用の文章をAIで自動生成。Instagram、LINE、ブログ、GBPに対応",
       icon: <PenTool className="h-6 w-6 text-primary" />,
-      isLocked: false,
+      isLocked: !isSubscriptionActive,
       path: "/app/bizwriter",
     },
-
     {
       id: "image-editor",
       title: "AI画像加工",
       description: "AIで写真を美しく加工。フォトエディター＆マジック消しゴムで、プロ級の画像編集を実現します",
       icon: <Image className="h-6 w-6 text-primary" />,
-      isLocked: false,
+      isLocked: !isSubscriptionActive,
       path: "/app/image",
     },
     {
@@ -183,7 +234,7 @@ export default function AppHome() {
       title: "カレンダーQRコード",
       description: "予定を選ぶだけでGoogleカレンダーやiPhoneカレンダーに登録できるQRコードを生成します",
       icon: <QrCode className="h-6 w-6 text-primary" />,
-      isLocked: false,
+      isLocked: !isSubscriptionActive,
       path: "/app/calendar-qr",
     },
     {
@@ -191,7 +242,7 @@ export default function AppHome() {
       title: "商材ドクター",
       description: "営業資料をAIが分析・診断。契約リスクや相場との乖離をチェックします",
       icon: <Stethoscope className="h-6 w-6 text-primary" />,
-      isLocked: false,
+      isLocked: !isSubscriptionActive,
       path: "/app/shozai-doctor",
     },
   ];
@@ -236,15 +287,77 @@ export default function AppHome() {
       {/* メインコンテンツ */}
       <main className="container py-8 relative z-10">
         {/* ウェルカムセクション */}
-        <div className="mb-10">
+        <div className="mb-8">
           <h1 className="text-3xl font-bold mb-3">
             こんにちは、{profile?.contactName || user?.name || "ユーザー"}さん
           </h1>
           <p className="text-muted-foreground text-lg">
             {profile?.companyName && `${profile.companyName} | `}
-            利用可能なAIアプリをお選びください
+            {isSubscriptionActive 
+              ? "利用可能なAIアプリをお選びください" 
+              : "サブスクリプションを有効にしてアプリをご利用ください"}
           </p>
         </div>
+
+        {/* サブスクリプション非アクティブ時の案内バナー */}
+        {!isSubscriptionActive && (
+          <div className="mb-8 glass-card p-5 border-l-4 border-amber-500 bg-amber-50/50 dark:bg-amber-950/20">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-800 dark:text-amber-400 mb-1">
+                  サブスクリプションが有効ではありません
+                </h3>
+                <p className="text-sm text-amber-700 dark:text-amber-300/80 mb-4">
+                  {statusInfo.message}
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {subscription.status === "incomplete" && (
+                    <Button 
+                      size="sm"
+                      className="btn-gradient text-white border-0 gap-2"
+                      onClick={() => { window.location.href = "/subscription"; }}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      決済を完了する
+                    </Button>
+                  )}
+                  {(subscription.status === "canceled" || subscription.status === "incomplete_expired") && (
+                    <Button 
+                      size="sm"
+                      className="btn-gradient text-white border-0 gap-2"
+                      onClick={() => { window.location.href = "/subscription"; }}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      新しいプランに申し込む
+                    </Button>
+                  )}
+                  {(subscription.status === "past_due" || subscription.status === "unpaid") && (
+                    <Button 
+                      size="sm"
+                      className="btn-gradient text-white border-0 gap-2"
+                      onClick={() => { window.location.href = "/settings"; }}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      お支払い情報を更新
+                    </Button>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => { window.location.href = "/settings"; }}
+                  >
+                    <Settings className="h-4 w-4" />
+                    設定を確認
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* アプリグリッド */}
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -255,6 +368,7 @@ export default function AppHome() {
               description={app.description}
               icon={app.icon}
               isLocked={app.isLocked}
+              lockReason={lockReason}
               onClick={app.path ? () => { window.location.href = app.path; } : undefined}
             />
           ))}
@@ -270,13 +384,8 @@ export default function AppHome() {
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">ステータス: </span>
-                <span className={`font-semibold ${
-                  subscription.status === "active" 
-                    ? "text-emerald-600" 
-                    : "text-amber-600"
-                }`}>
-                  {subscription.status === "active" ? "有効" : 
-                   subscription.status === "incomplete" ? "処理中" : subscription.status}
+                <span className={`font-semibold ${statusInfo.color}`}>
+                  {statusInfo.label}
                 </span>
               </div>
             </div>

@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link } from "wouter";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 import { Button } from "@/components/ui/button";
 import type {
   UserProfile,
@@ -92,6 +93,7 @@ function FadeIn({ children, stepKey }: { children: React.ReactNode; stepKey: num
 
 // ============ Main App ============
 export default function ShozaiDoctorApp() {
+  const { isLoading: subLoading } = useSubscriptionGuard();
   const [currentStep, setCurrentStep] = useState(1);
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -163,6 +165,16 @@ export default function ShozaiDoctorApp() {
       scrollToTop();
     }
   }, [currentStep, scrollToTop]);
+
+  if (subLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-teal-50/30 to-indigo-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/30">
+        <div className="p-8 rounded-2xl bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl shadow-lg">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

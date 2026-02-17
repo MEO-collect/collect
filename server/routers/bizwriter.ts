@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import type { StoreProfile, GeneratedContent, OutputFormat, Tone, Templates } from "@shared/bizwriter-types";
 import { FORMAT_CHAR_LIMITS } from "@shared/bizwriter-types";
@@ -276,7 +276,7 @@ async function generateContent(
 // ============ tRPC Router ============
 
 export const bizwriterRouter = router({
-  extractStoreInfo: protectedProcedure
+  extractStoreInfo: subscribedProcedure
     .input(
       z.object({
         mapsUrl: z.string().url("有効なURLを入力してください"),
@@ -294,7 +294,7 @@ export const bizwriterRouter = router({
       return { success: true as const, data: result };
     }),
 
-  generate: protectedProcedure
+  generate: subscribedProcedure
     .input(
       z.object({
         profile: z.object({

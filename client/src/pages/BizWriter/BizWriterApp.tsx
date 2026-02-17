@@ -7,7 +7,9 @@ import {
   FileText,
   History,
   Sparkles,
+  Loader2,
 } from "lucide-react";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 import type {
   StoreProfile,
   Templates,
@@ -48,6 +50,7 @@ function loadFromLS<T>(key: string, fallback: T): T {
 }
 
 export default function BizWriterApp() {
+  const { isLoading: subLoading } = useSubscriptionGuard();
   const [activeTab, setActiveTab] = useState<TabId>("generate");
   const [profile, setProfile] = useState<StoreProfile>(() =>
     loadFromLS(LS_PROFILE, DEFAULT_STORE_PROFILE)
@@ -96,6 +99,16 @@ export default function BizWriterApp() {
   const handleClearHistory = useCallback(() => {
     setHistory([]);
   }, []);
+
+  if (subLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen gradient-mesh relative overflow-hidden flex flex-col">

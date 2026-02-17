@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import { calculateCostYen } from "@shared/shozai-types";
 import type { AnalysisResult, DiagnosisResult, TokenUsage } from "@shared/shozai-types";
@@ -39,7 +39,7 @@ const diagnoseSchema = z.object({
 
 export const shozaiRouter = router({
   // フェーズ3: 資料分析
-  analyze: protectedProcedure
+  analyze: subscribedProcedure
     .input(analyzeSchema)
     .mutation(async ({ input }) => {
       const { files, profile } = input;
@@ -146,7 +146,7 @@ export const shozaiRouter = router({
     }),
 
   // フェーズ4: AI診断
-  diagnose: protectedProcedure
+  diagnose: subscribedProcedure
     .input(diagnoseSchema)
     .mutation(async ({ input }) => {
       const { analysis, profile } = input;

@@ -16,9 +16,21 @@ import {
   ClipboardPaste,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { useSubscriptionGuard } from "@/hooks/useSubscriptionGuard";
 
 export default function MagicEraser() {
   const [, navigate] = useLocation();
+  const { isLoading: subLoading } = useSubscriptionGuard();
+
+  if (subLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <div className="glass-card p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [originalMimeType, setOriginalMimeType] = useState("image/png");
   const [brushSize, setBrushSize] = useState(30);
