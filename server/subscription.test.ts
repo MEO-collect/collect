@@ -75,18 +75,22 @@ vi.mock("./db", () => ({
   }),
   createSubscription: vi.fn().mockResolvedValue(undefined),
   updateSubscription: vi.fn().mockResolvedValue(undefined),
+  deleteSubscription: vi.fn().mockResolvedValue(undefined),
+  getAllSubscriptionsWithUsers: vi.fn().mockResolvedValue([]),
+  getSubscriptionByStripeSubscriptionId: vi.fn().mockResolvedValue(null),
+  getSubscriptionByStripeCustomerId: vi.fn().mockResolvedValue(null),
 }));
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAuthContext(): TrpcContext {
+function createAuthContext(role: "user" | "admin" = "user"): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
     openId: "test-user",
     email: "test@example.com",
     name: "Test User",
     loginMethod: "manus",
-    role: "user",
+    role,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -136,7 +140,7 @@ describe("profile router", () => {
   });
 });
 
-describe("subscription router", () => {
+describe("subscription.get", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -153,6 +157,17 @@ describe("subscription router", () => {
     expect(result?.isInInitialPeriod).toBe(true);
   });
 
+  it("should return null when no subscription exists", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce(undefined);
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.get();
+
+    expect(result).toBeNull();
+  });
+
   it("should return subscription dates (startedAt, currentPeriodEnd, initialPeriodEndsAt)", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
@@ -160,19 +175,21 @@ describe("subscription router", () => {
     const result = await caller.subscription.get();
 
     expect(result).toBeDefined();
-    // 契約開始日が存在することを確認
     expect(result?.startedAt).toBeDefined();
     expect(typeof result?.startedAt).toBe("number");
-    // 次回更新日が存在することを確認
     expect(result?.currentPeriodEnd).toBeDefined();
     expect(typeof result?.currentPeriodEnd).toBe("number");
-    // 初回契約期間終了日が存在することを確認
     expect(result?.initialPeriodEndsAt).toBeDefined();
     expect(typeof result?.initialPeriodEndsAt).toBe("number");
   });
+});
+
+describe("subscription.createCheckoutSession", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it("should create checkout session for new user", async () => {
-    // Mock getSubscription to return null for this test
     const { getSubscription } = await import("./db");
     vi.mocked(getSubscription).mockResolvedValueOnce(null);
 
@@ -183,6 +200,69 @@ describe("subscription router", () => {
 
     expect(result).toBeDefined();
     expect(result.url).toBe("https://checkout.stripe.com/test-session");
+  });
+
+  it("should throw error when user already has active subscription", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(caller.subscription.createCheckoutSession()).rejects.toThrow(
+      "既にアクティブなサブスクリプションがあります"
+    );
+  });
+
+  it("should allow checkout for incomplete subscription (reuses customer ID)", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: "cus_existing",
+      stripeSubscriptionId: null,
+      status: "incomplete",
+      startedAt: null,
+      initialPeriodEndsAt: null,
+      isInInitialPeriod: false,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.createCheckoutSession();
+
+    expect(result.url).toBe("https://checkout.stripe.com/test-session");
+  });
+
+  it("should allow checkout for canceled subscription", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: "cus_existing",
+      stripeSubscriptionId: "sub_old",
+      status: "canceled",
+      startedAt: Date.now() - 365 * 24 * 60 * 60 * 1000,
+      initialPeriodEndsAt: Date.now() - 1,
+      isInInitialPeriod: false,
+      currentPeriodEnd: Date.now() - 1,
+      canceledAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.createCheckoutSession();
+
+    expect(result.url).toBe("https://checkout.stripe.com/test-session");
+  });
+});
+
+describe("subscription.cancel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
   it("should handle cancel request during initial period", async () => {
@@ -283,5 +363,214 @@ describe("subscription.verifySession", () => {
 
     expect(result.status).toBe("none");
     expect(result.synced).toBe(false);
+  });
+});
+
+describe("subscription.syncFromStripe", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return error when no subscription record exists", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce(undefined);
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.syncFromStripe();
+
+    expect(result.synced).toBe(false);
+    expect(result.status).toBe("none");
+    expect(result.message).toContain("レコードがありません");
+  });
+
+  it("should return error when no Stripe customer ID", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      status: "incomplete",
+      startedAt: null,
+      initialPeriodEndsAt: null,
+      isInInitialPeriod: false,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.syncFromStripe();
+
+    expect(result.synced).toBe(false);
+    expect(result.message).toContain("顧客ID");
+  });
+
+  // Note: syncFromStripe with active Stripe data is tested via the default mock
+  // which returns empty subscription list. The Stripe mock is module-level and
+  // cannot be overridden per-test without more complex setup.
+
+  it("should report no subscriptions found in Stripe", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: "cus_test123",
+      stripeSubscriptionId: null,
+      status: "incomplete",
+      startedAt: null,
+      initialPeriodEndsAt: null,
+      isInInitialPeriod: false,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.subscription.syncFromStripe();
+
+    expect(result.synced).toBe(false);
+    expect(result.message).toContain("見つかりません");
+  });
+});
+
+describe("admin.listSubscriptions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return list of subscriptions for admin", async () => {
+    const { getAllSubscriptionsWithUsers } = await import("./db");
+    vi.mocked(getAllSubscriptionsWithUsers).mockResolvedValueOnce([
+      {
+        subscription: {
+          id: 1,
+          userId: 1,
+          stripeCustomerId: "cus_test",
+          stripeSubscriptionId: "sub_test",
+          status: "active",
+          startedAt: Date.now(),
+          currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          canceledAt: null,
+          isInInitialPeriod: true,
+          initialPeriodEndsAt: Date.now() + 365 * 24 * 60 * 60 * 1000,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        userName: "Test User",
+        userEmail: "test@example.com",
+      },
+    ]);
+
+    const ctx = createAuthContext("admin");
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.listSubscriptions();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].status).toBe("active");
+    expect(result[0].userName).toBe("Test User");
+  });
+
+  it("should reject non-admin users", async () => {
+    const ctx = createAuthContext("user");
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(caller.admin.listSubscriptions()).rejects.toThrow();
+  });
+});
+
+describe("admin.resetSubscription", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should delete subscription record for admin", async () => {
+    const { deleteSubscription } = await import("./db");
+
+    const ctx = createAuthContext("admin");
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.resetSubscription({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(deleteSubscription).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("admin.forceUpdateStatus", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should update subscription status for admin", async () => {
+    const { updateSubscription } = await import("./db");
+
+    const ctx = createAuthContext("admin");
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.forceUpdateStatus({
+      userId: 1,
+      status: "active",
+    });
+
+    expect(result.success).toBe(true);
+    expect(updateSubscription).toHaveBeenCalledWith(1, { status: "active" });
+  });
+
+  it("should reject non-admin users for forceUpdateStatus", async () => {
+    const ctx = createAuthContext("user");
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(
+      caller.admin.forceUpdateStatus({ userId: 1, status: "active" })
+    ).rejects.toThrow();
+  });
+});
+
+describe("admin.syncSubscription", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return error when no subscription record found", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce(undefined);
+
+    const ctx = createAuthContext("admin");
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.syncSubscription({ userId: 999 });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("見つかりません");
+  });
+
+  it("should return error when no Stripe customer ID", async () => {
+    const { getSubscription } = await import("./db");
+    vi.mocked(getSubscription).mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      status: "incomplete",
+      startedAt: null,
+      initialPeriodEndsAt: null,
+      isInInitialPeriod: false,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const ctx = createAuthContext("admin");
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.admin.syncSubscription({ userId: 1 });
+
+    expect(result.success).toBe(false);
+    // The mock returns the record but with null stripeCustomerId
+    // The admin.syncSubscription checks for stripeCustomerId
+    expect(result.message).toBeDefined();
   });
 });

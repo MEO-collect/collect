@@ -11,6 +11,7 @@ import {
   CreditCard, 
   Loader2, 
   Mail, 
+  RefreshCw,
   User 
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -96,6 +97,20 @@ export default function Settings() {
     },
     onError: (error) => {
       toast.error(error.message || "解約に失敗しました");
+    },
+  });
+
+  const syncFromStripe = trpc.subscription.syncFromStripe.useMutation({
+    onSuccess: (data) => {
+      refetchSubscription();
+      if (data.synced) {
+        toast.success(data.message || "Stripeから同期しました");
+      } else {
+        toast.info(data.message || "同期する情報がありません");
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "同期に失敗しました");
     },
   });
 
@@ -326,6 +341,38 @@ export default function Settings() {
                   </div>
                 </div>
               )}
+
+              {/* 手動同期ボタン */}
+              <div className="p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">サブスクリプション同期</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      決済済みなのに反映されない場合はこちらを押してください
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="glass-button rounded-xl gap-2"
+                    onClick={() => syncFromStripe.mutate()}
+                    disabled={syncFromStripe.isPending}
+                  >
+                    {syncFromStripe.isPending ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        同期中
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Stripeから同期
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
 
               <div className="pt-4 border-t border-white/20">
                 <Button 

@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Home, Loader2, UserPlus } from "lucide-react";
+import { CheckCircle2, Home, Loader2, RefreshCw, UserPlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 /**
  * 決済完了ページ
@@ -14,9 +15,11 @@ import { useEffect, useState } from "react";
 export default function SubscriptionSuccess() {
   const [isChecking, setIsChecking] = useState(true);
   const [syncError, setSyncError] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // URLからsession_idを取得
-  const searchParams = new URLSearchParams(window.location.search);
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const sessionId = searchParams.get("session_id") || undefined;
 
   // プロファイル状態を確認
@@ -26,33 +29,66 @@ export default function SubscriptionSuccess() {
 
   // サブスクリプション同期API
   const verifySession = trpc.subscription.verifySession.useMutation();
+  const syncFromStripe = trpc.subscription.syncFromStripe.useMutation();
+
+  const performSync = async () => {
+    console.log("Syncing subscription from Stripe session...", sessionId);
+    
+    try {
+      // Strategy 1: Verify via session ID
+      const result = await verifySession.mutateAsync({ sessionId });
+      console.log("Verify session result:", result);
+      
+      if (result.synced && result.status === "active") {
+        setSyncSuccess(true);
+        setSyncError(false);
+        return true;
+      }
+    } catch (err) {
+      console.error("Failed to verify session:", err);
+    }
+
+    try {
+      // Strategy 2: Sync from Stripe customer data
+      const syncResult = await syncFromStripe.mutateAsync();
+      console.log("SyncFromStripe result:", syncResult);
+      
+      if (syncResult.synced && (syncResult.status === "active" || syncResult.status === "trialing")) {
+        setSyncSuccess(true);
+        setSyncError(false);
+        return true;
+      }
+    } catch (err) {
+      console.error("Failed to sync from Stripe:", err);
+    }
+
+    setSyncError(true);
+    return false;
+  };
 
   useEffect(() => {
     const syncAndCheck = async () => {
-      console.log("Syncing subscription from Stripe session...", sessionId);
-      
-      try {
-        // Stripe Checkout Sessionからサブスクリプションを同期
-        const result = await verifySession.mutateAsync({ sessionId });
-        console.log("Verify session result:", result);
-        
-        if (result.synced) {
-          console.log("Subscription synced successfully!");
-        }
-      } catch (err) {
-        console.error("Failed to verify session:", err);
-        setSyncError(true);
-      }
-
-      // プロファイル状態を再取得
+      await performSync();
       await refetchProfile();
       setIsChecking(false);
     };
 
-    // 少し待ってからWebhookの処理が完了する時間を確保
-    const timer = setTimeout(syncAndCheck, 1500);
+    // Wait for webhook processing
+    const timer = setTimeout(syncAndCheck, 2000);
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRetrySync = async () => {
+    setIsRetrying(true);
+    const success = await performSync();
+    await refetchProfile();
+    setIsRetrying(false);
+    if (success) {
+      toast.success("サブスクリプションが正常に同期されました");
+    } else {
+      toast.info("同期に時間がかかっています。しばらくお待ちください。");
+    }
+  };
 
   const handleContinue = () => {
     // プロファイルがある場合はホームへ、ない場合は会員登録へ
@@ -83,8 +119,8 @@ export default function SubscriptionSuccess() {
           <p className="text-sm text-muted-foreground">
             {isChecking
               ? "サブスクリプション情報を同期中です..."
-              : syncError
-                ? "同期に問題がありましたが、しばらくすると反映されます。"
+              : syncError && !syncSuccess
+                ? "同期に時間がかかっています。「再同期」ボタンを押すか、しばらくお待ちください。"
                 : profile 
                   ? "AIアプリをご利用いただけます。" 
                   : "次に会員情報を登録して、AIアプリをご利用いただけるようになります。"}
@@ -97,23 +133,46 @@ export default function SubscriptionSuccess() {
             <span>登録状態を確認中...</span>
           </div>
         ) : (
-          <Button 
-            className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
-            type="button"
-            onClick={handleContinue}
-          >
-            {profile ? (
-              <>
-                <Home className="mr-2 h-5 w-5" />
-                ホームへ進む
-              </>
-            ) : (
-              <>
-                <UserPlus className="mr-2 h-5 w-5" />
-                会員情報を登録する
-              </>
+          <div className="space-y-3">
+            <Button 
+              className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
+              type="button"
+              onClick={handleContinue}
+            >
+              {profile ? (
+                <>
+                  <Home className="mr-2 h-5 w-5" />
+                  ホームへ進む
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-5 w-5" />
+                  会員情報を登録する
+                </>
+              )}
+            </Button>
+            {syncError && !syncSuccess && (
+              <Button
+                variant="outline"
+                className="w-full glass-button h-12 rounded-xl gap-2"
+                type="button"
+                onClick={handleRetrySync}
+                disabled={isRetrying}
+              >
+                {isRetrying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    同期中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    サブスクリプションを再同期
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
+          </div>
         )}
       </div>
     </div>

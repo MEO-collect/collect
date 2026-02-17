@@ -14,8 +14,9 @@ import {
   Stethoscope,
   AlertTriangle,
   CreditCard,
+  RefreshCw,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
 
@@ -44,7 +45,7 @@ function AppCard({ title, description, icon, isLocked = false, lockReason, onCli
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/80">
               <Lock className="h-5 w-5" />
             </div>
-            <span className="text-xs font-medium text-center px-4 bg-background/80 rounded-full py-1 px-3">{lockReason || "利用不可"}</span>
+            <span className="text-xs font-medium text-center bg-background/80 rounded-full py-1 px-3">{lockReason || "利用不可"}</span>
           </div>
         </div>
       )}
@@ -71,17 +72,42 @@ function AppCard({ title, description, icon, isLocked = false, lockReason, onCli
  * サブスクリプションがアクティブでない場合：
  * - アプリカードはロック表示（利用不可）
  * - 上部に案内バナーを表示
+ * - 「決済を完了する」ボタンはStripe Checkoutに直接遷移
  */
 export default function AppHome() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
-  const { data: subscription, isLoading: subscriptionLoading } = trpc.subscription.get.useQuery(undefined, {
+  const { data: subscription, isLoading: subscriptionLoading, refetch: refetchSubscription } = trpc.subscription.get.useQuery(undefined, {
     enabled: isAuthenticated,
+    refetchOnWindowFocus: true,
   });
+
+  // Stripe Checkoutセッション作成
+  const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
+    onSuccess: (data) => {
+      if (data.url) {
+        toast.info("決済ページに移動します");
+        window.open(data.url, "_blank");
+      }
+    },
+    onError: (error) => {
+      console.error("Checkout error:", error);
+      if (error.message?.includes("既にアクティブ")) {
+        toast.info("サブスクリプションは既にアクティブです。ページを更新します。");
+        refetchSubscription();
+      } else {
+        toast.error(error.message || "エラーが発生しました");
+      }
+    },
+  });
+
+  // サブスクリプション同期
+  const syncFromStripe = trpc.subscription.syncFromStripe.useMutation();
 
   // 未ログインの場合はランディングページへ
   useEffect(() => {
@@ -90,11 +116,20 @@ export default function AppHome() {
     }
   }, [authLoading, isAuthenticated]);
 
-  // サブスクリプションがない場合は /subscription へ
+  // サブスクリプションがない、またはincomplete/canceled/incomplete_expired の場合は /subscription へ
   useEffect(() => {
     if (authLoading || subscriptionLoading) return;
     if (!isAuthenticated) return;
+    
     if (!subscription) {
+      // サブスクリプションレコードなし → サブスクリプションページへ
+      window.location.href = "/subscription";
+    } else if (
+      subscription.status === "incomplete" || 
+      subscription.status === "incomplete_expired" ||
+      subscription.status === "canceled"
+    ) {
+      // 未完了/解約済み → サブスクリプションページへ（再決済を促す）
       window.location.href = "/subscription";
     }
   }, [authLoading, subscriptionLoading, isAuthenticated, subscription]);
@@ -103,15 +138,50 @@ export default function AppHome() {
   useEffect(() => {
     if (authLoading || subscriptionLoading || profileLoading) return;
     if (!isAuthenticated) return;
-    if (subscription && !profile) {
+    if (subscription && subscription.status === "active" && !profile) {
       window.location.href = "/register";
     }
   }, [authLoading, subscriptionLoading, profileLoading, isAuthenticated, subscription, profile]);
+
+  // タブ復帰時にサブスクリプション状態を再取得
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isAuthenticated) {
+        refetchSubscription();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isAuthenticated, refetchSubscription]);
 
   const handleLogout = async () => {
     await logout();
     toast.success("ログアウトしました");
     window.location.href = "/";
+  };
+
+  // 「決済を完了する」ボタン：Stripe Checkoutに直接遷移
+  const handleCompletePayment = () => {
+    createCheckout.mutate();
+  };
+
+  // 手動同期ボタン：Stripeの最新状態をDBに反映
+  const handleSyncSubscription = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncFromStripe.mutateAsync();
+      await refetchSubscription();
+      if (result.synced) {
+        toast.success(result.message || "サブスクリプション情報を同期しました");
+      } else {
+        toast.info(result.message || "最新の状態に更新しました");
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
+      toast.error("同期に失敗しました。しばらく経ってから再度お試しください。");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   if (authLoading || profileLoading || subscriptionLoading) {
@@ -314,26 +384,49 @@ export default function AppHome() {
                   {statusInfo.message}
                 </p>
                 <div className="flex flex-wrap gap-3">
+                  {/* incomplete: Stripe Checkoutに直接遷移して決済を完了 */}
                   {subscription.status === "incomplete" && (
                     <Button 
                       size="sm"
                       className="btn-gradient text-white border-0 gap-2"
-                      onClick={() => { window.location.href = "/subscription"; }}
+                      onClick={handleCompletePayment}
+                      disabled={createCheckout.isPending}
                     >
-                      <CreditCard className="h-4 w-4" />
-                      決済を完了する
+                      {createCheckout.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          処理中...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          決済を完了する
+                        </>
+                      )}
                     </Button>
                   )}
+                  {/* canceled / incomplete_expired: 新しいCheckoutセッションを作成 */}
                   {(subscription.status === "canceled" || subscription.status === "incomplete_expired") && (
                     <Button 
                       size="sm"
                       className="btn-gradient text-white border-0 gap-2"
-                      onClick={() => { window.location.href = "/subscription"; }}
+                      onClick={handleCompletePayment}
+                      disabled={createCheckout.isPending}
                     >
-                      <CreditCard className="h-4 w-4" />
-                      新しいプランに申し込む
+                      {createCheckout.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          処理中...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          新しいプランに申し込む
+                        </>
+                      )}
                     </Button>
                   )}
+                  {/* past_due / unpaid: 設定画面へ */}
                   {(subscription.status === "past_due" || subscription.status === "unpaid") && (
                     <Button 
                       size="sm"
@@ -344,6 +437,26 @@ export default function AppHome() {
                       お支払い情報を更新
                     </Button>
                   )}
+                  {/* 手動同期ボタン：決済済みなのに反映されない場合 */}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleSyncSubscription}
+                    disabled={isSyncing}
+                  >
+                    {isSyncing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        同期中...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4" />
+                        状態を更新
+                      </>
+                    )}
+                  </Button>
                   <Button 
                     variant="outline" 
                     size="sm"

@@ -1,0 +1,75 @@
+{
+  "query": "SELECT s.id, s.userId, s.stripeCustomerId, s.stripeSubscriptionId, s.status, s.startedAt, s.isInInitialPeriod, s.currentPeriodEnd, s.canceledAt, s.createdAt, s.updatedAt FROM subscriptions s ORDER BY s.id DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT s.id, s.userId, s.stripeCustomerId, s.stripeSubscriptionId, s.status, s.startedAt, s.isInInitialPeriod, s.currentPeriodEnd, s.canceledAt, s.createdAt, s.updatedAt FROM subscriptions s ORDER BY s.id DESC;",
+  "rows": [
+    {
+      "id": "240001",
+      "userId": "1740017",
+      "stripeCustomerId": "cus_TzHFb1IeiFBtdu",
+      "stripeSubscriptionId": "NULL",
+      "status": "incomplete",
+      "startedAt": "NULL",
+      "isInInitialPeriod": "1",
+      "currentPeriodEnd": "NULL",
+      "canceledAt": "NULL",
+      "createdAt": "2026-02-16 03:41:43",
+      "updatedAt": "2026-02-16 03:41:43"
+    },
+    {
+      "id": "210001",
+      "userId": "2580006",
+      "stripeCustomerId": "cus_Tx3seffgovAj9G",
+      "stripeSubscriptionId": "NULL",
+      "status": "incomplete",
+      "startedAt": "NULL",
+      "isInInitialPeriod": "1",
+      "currentPeriodEnd": "NULL",
+      "canceledAt": "NULL",
+      "createdAt": "2026-02-10 05:44:38",
+      "updatedAt": "2026-02-10 05:44:38"
+    },
+    {
+      "id": "180002",
+      "userId": "270107",
+      "stripeCustomerId": "cus_Tvc2BOfZOef6ml",
+      "stripeSubscriptionId": "NULL",
+      "status": "incomplete",
+      "startedAt": "NULL",
+      "isInInitialPeriod": "1",
+      "currentPeriodEnd": "NULL",
+      "canceledAt": "NULL",
+      "createdAt": "2026-02-06 08:54:28",
+      "updatedAt": "2026-02-06 08:54:28"
+    },
+    {
+      "id": "180001",
+      "userId": "1290014",
+      "stripeCustomerId": "cus_Tvbj0n2cskHCBV",
+      "stripeSubscriptionId": "NULL",
+      "status": "incomplete",
+      "startedAt": "NULL",
+      "isInInitialPeriod": "1",
+      "currentPeriodEnd": "NULL",
+      "canceledAt": "NULL",
+      "createdAt": "2026-02-06 08:35:40",
+      "updatedAt": "2026-02-06 08:35:40"
+    },
+    {
+      "id": "150001",
+      "userId": "1",
+      "stripeCustomerId": "cus_TvFIhapVNEyZxD",
+      "stripeSubscriptionId": "NULL",
+      "status": "incomplete",
+      "startedAt": "NULL",
+      "isInInitialPeriod": "1",
+      "currentPeriodEnd": "NULL",
+      "canceledAt": "NULL",
+      "createdAt": "2026-02-05 09:25:04",
+      "updatedAt": "2026-02-06 08:21:15"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tstripeCustomerId\tstripeSubscriptionId\tstatus\tstartedAt\tisInInitialPeriod\tcurrentPeriodEnd\tcanceledAt\tcreatedAt\tupdatedAt\n240001\t1740017\tcus_TzHFb1IeiFBtdu\tNULL\tincomplete\tNULL\t1\tNULL\tNULL\t2026-02-16 03:41:43\t2026-02-16 03:41:43\n210001\t2580006\tcus_Tx3seffgovAj9G\tNULL\tincomplete\tNULL\t1\tNULL\tNULL\t2026-02-10 05:44:38\t2026-02-10 05:44:38\n180002\t270107\tcus_Tvc2BOfZOef6ml\tNULL\tincomplete\tNULL\t1\tNULL\tNULL\t2026-02-06 08:54:28\t2026-02-06 08:54:28\n180001\t1290014\tcus_Tvbj0n2cskHCBV\tNULL\tincomplete\tNULL\t1\tNULL\tNULL\t2026-02-06 08:35:40\t2026-02-06 08:35:40\n150001\t1\tcus_TvFIhapVNEyZxD\tNULL\tincomplete\tNULL\t1\tNULL\tNULL\t2026-02-05 09:25:04\t2026-02-06 08:21:15\n",
+  "stderr": "",
+  "execution_time_ms": 1522
+}

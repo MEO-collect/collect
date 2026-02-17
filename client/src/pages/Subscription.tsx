@@ -1,29 +1,28 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, Check, CreditCard, Loader2, Shield, Sparkles } from "lucide-react";
+import { ArrowRight, Check, CreditCard, Loader2, RefreshCw, Shield, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const features = [
   "音声録音・書き起こし・要約アプリ",
-  "議事録自動生成",
-  "カルテ作成（SOAP形式）",
-  "話者識別・色分け表示",
-  "Word形式エクスポート",
+  "AI文章作成（SNS・ブログ・MEO対応）",
+  "AI画像加工（フォトエディター＆マジック消しゴム）",
+  "カレンダーQRコード生成",
+  "商材ドクター（AI商材診断）",
 ];
 
 /**
  * サブスクリプション登録ページ
  * 
- * リダイレクトルール（シンプル）：
+ * リダイレクトルール：
  * - 未ログイン → / (ランディング)
- * - ログイン済み＋サブスクリプションあり＋プロファイルあり → /home
- * - それ以外 → このページを表示（サブスクリプションの有無に関係なく）
+ * - ログイン済み＋アクティブなサブスクリプション＋プロファイルあり → /home
+ * - それ以外 → このページを表示
  * 
- * サブスクリプションがあってもプロファイルがない場合は、
- * このページに「AIツール使用画面へ移動」ボタンを表示して
- * ユーザーが /register に遷移できるようにする。
+ * incomplete/canceled/incomplete_expired状態のサブスクリプションは
+ * 「未完了」として扱い、再度Stripe Checkoutに進めるようにする。
  */
 export default function Subscription() {
   const { loading: authLoading, isAuthenticated } = useAuth();
@@ -40,6 +39,7 @@ export default function Subscription() {
   });
 
   const verifySession = trpc.subscription.verifySession.useMutation();
+  const syncFromStripe = trpc.subscription.syncFromStripe.useMutation();
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
@@ -50,32 +50,41 @@ export default function Subscription() {
     },
     onError: (error) => {
       console.error("Checkout error:", error);
-      toast.error(error.message || "エラーが発生しました");
+      if (error.message?.includes("既にアクティブ")) {
+        toast.info("サブスクリプションは既にアクティブです。ページを更新します。");
+        refetchSubscription();
+      } else {
+        toast.error(error.message || "エラーが発生しました");
+      }
     },
   });
 
+  // サブスクリプションがアクティブかどうか
+  const isActive = subscription?.status === "active";
+  
+  // incomplete/canceled/incomplete_expired は「未完了」として再Checkout可能
+  const canStartCheckout = !subscription || 
+    subscription.status === "incomplete" || 
+    subscription.status === "canceled" || 
+    subscription.status === "incomplete_expired";
+
   const handleSubscribe = () => {
-    // 二重払い防止：既にサブスクリプションが存在する場合はStripeに移行しない
-    if (subscription) {
-      toast.info("既にサブスクリプションに登録済みです。");
-      if (!profile) {
-        window.location.href = "/register";
-      } else {
-        window.location.href = "/home";
-      }
-      return;
-    }
     createCheckout.mutate();
   };
 
   // 「AIツール使用画面へ移動」ボタンのハンドラ
-  // まずverifySessionでサブスクリプションを同期してから遷移する
   const handleGoToApp = async () => {
     setIsSyncing(true);
     try {
-      // サブスクリプションを同期
-      const result = await verifySession.mutateAsync({});
-      console.log("Verify session result:", result);
+      // まずStripeから同期を試みる
+      const syncResult = await syncFromStripe.mutateAsync();
+      console.log("SyncFromStripe result:", syncResult);
+      
+      if (!syncResult.synced) {
+        // syncFromStripeで同期できなかった場合、verifySessionも試す
+        const verifyResult = await verifySession.mutateAsync({});
+        console.log("VerifySession result:", verifyResult);
+      }
       
       // サブスクリプション情報を再取得
       await refetchSubscription();
@@ -87,13 +96,32 @@ export default function Subscription() {
         window.location.href = "/home";
       }
     } catch (err) {
-      console.error("Failed to verify session:", err);
+      console.error("Failed to sync:", err);
       // エラーでも遷移を試みる
       if (!profile) {
         window.location.href = "/register";
       } else {
         window.location.href = "/home";
       }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 手動同期ボタン
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncFromStripe.mutateAsync();
+      await refetchSubscription();
+      if (result.synced) {
+        toast.success(result.message || "同期しました");
+      } else {
+        toast.info(result.message || "同期する情報がありません");
+      }
+    } catch (err) {
+      console.error("Manual sync error:", err);
+      toast.error("同期に失敗しました");
     } finally {
       setIsSyncing(false);
     }
@@ -106,16 +134,15 @@ export default function Subscription() {
     }
   }, [authLoading, isAuthenticated]);
 
-  // サブスクリプションが存在し、プロファイルも存在する場合のみホームへリダイレクト
-  // （両方揃っている＝完全に登録済みなのでこのページに留まる必要がない）
+  // アクティブなサブスクリプション＋プロファイルがある場合のみホームへリダイレクト
   useEffect(() => {
     if (authLoading || subscriptionLoading || profileLoading) return;
     if (!isAuthenticated) return;
     
-    if (subscription && profile) {
+    if (isActive && profile) {
       window.location.href = "/home";
     }
-  }, [authLoading, subscriptionLoading, profileLoading, subscription, profile, isAuthenticated]);
+  }, [authLoading, subscriptionLoading, profileLoading, isActive, profile, isAuthenticated]);
 
   // タブ復帰時にサブスクリプション状態を再取得
   useEffect(() => {
@@ -211,37 +238,67 @@ export default function Subscription() {
           </div>
 
           {/* 登録ボタン */}
-          {subscription ? (
-            // 既にサブスクリプションがある場合は登録済み表示
+          {isActive ? (
+            // アクティブなサブスクリプションがある場合
             <div className="p-5 rounded-2xl bg-green-50/80 backdrop-blur-sm border border-green-200/50 text-center">
               <div className="flex items-center justify-center gap-2 text-green-700 mb-2">
                 <Check className="h-5 w-5" />
                 <span className="font-semibold">登録済み</span>
               </div>
               <p className="text-sm text-green-600">
-                既にサブスクリプションに登録されています
+                サブスクリプションはアクティブです
               </p>
             </div>
-          ) : (
-            <Button 
-              className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
-              size="lg"
-              type="button"
-              onClick={handleSubscribe}
-              disabled={createCheckout.isPending}
-            >
-              {createCheckout.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  処理中...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="mr-2 h-5 w-5" />
-                  サブスクリプションを開始
-                </>
+          ) : canStartCheckout ? (
+            // 未登録 or incomplete/canceled → Checkout可能
+            <div className="space-y-3">
+              {subscription?.status === "incomplete" && (
+                <div className="p-4 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50 text-center">
+                  <p className="text-sm text-amber-700">
+                    前回の決済が完了していません。下のボタンから再度お手続きください。
+                  </p>
+                </div>
               )}
-            </Button>
+              <Button 
+                className="w-full btn-gradient text-white border-0 h-14 text-lg rounded-xl"
+                size="lg"
+                type="button"
+                onClick={handleSubscribe}
+                disabled={createCheckout.isPending}
+              >
+                {createCheckout.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    処理中...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-5 w-5" />
+                    {subscription?.status === "incomplete" 
+                      ? "決済を完了する" 
+                      : subscription?.status === "canceled"
+                        ? "新しいプランに申し込む"
+                        : "サブスクリプションを開始"}
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            // その他の状態（past_due, unpaidなど）
+            <div className="p-5 rounded-2xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50 text-center">
+              <p className="text-sm text-amber-700 mb-3">
+                サブスクリプションに問題があります（ステータス: {subscription?.status}）。
+                設定画面からお支払い情報を更新してください。
+              </p>
+              <Button
+                variant="outline"
+                className="glass-button rounded-xl"
+                type="button"
+                onClick={() => { window.location.href = "/settings"; }}
+              >
+                設定画面へ
+              </Button>
+            </div>
           )}
 
           <p className="text-xs text-center text-muted-foreground">
@@ -249,8 +306,8 @@ export default function Subscription() {
           </p>
 
           {/* 登録済みユーザー向けリンク */}
-          <div className="pt-4 border-t border-white/30">
-            <p className="text-sm text-center text-muted-foreground mb-3">
+          <div className="pt-4 border-t border-white/30 space-y-3">
+            <p className="text-sm text-center text-muted-foreground">
               既にプレミアムプランに登録済みの方
             </p>
             <Button
@@ -272,6 +329,30 @@ export default function Subscription() {
                 </>
               )}
             </Button>
+            
+            {/* 決済済みなのに反映されない場合の手動同期ボタン */}
+            {subscription?.status === "incomplete" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground gap-2"
+                type="button"
+                onClick={handleManualSync}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    同期中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    決済済みなのに反映されない場合
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

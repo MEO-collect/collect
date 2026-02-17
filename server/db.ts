@@ -158,3 +158,34 @@ export async function updateSubscriptionByStripeId(stripeSubscriptionId: string,
 
   await db.update(subscriptions).set(updates).where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
 }
+
+export async function deleteSubscription(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+}
+
+export async function getAllSubscriptions() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select().from(subscriptions);
+  return result;
+}
+
+export async function getAllSubscriptionsWithUsers() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select({
+      subscription: subscriptions,
+      userName: users.name,
+      userEmail: users.email,
+      userOpenId: users.openId,
+    })
+    .from(subscriptions)
+    .leftJoin(users, eq(subscriptions.userId, users.id));
+  return result;
+}

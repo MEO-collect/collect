@@ -1,9 +1,9 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { getMemberProfile, upsertMemberProfile, getSubscription, createSubscription, updateSubscription } from "./db";
+import { getMemberProfile, upsertMemberProfile, getSubscription, createSubscription, updateSubscription, deleteSubscription, getAllSubscriptionsWithUsers } from "./db";
 import { getStripe } from "./stripe/client";
 import { SUBSCRIPTION_PLAN, calculateCancellationFee, isInInitialPeriod } from "./stripe/products";
 import { TRPCError } from "@trpc/server";
@@ -160,32 +160,35 @@ export const appRouter = router({
           }
         }
 
-        // If no session ID, check if user has any Stripe customer with active subscription
-        // by looking at the existing subscription record
+        // If no session ID, try to sync from Stripe using the customer ID
         if (existing && existing.stripeCustomerId) {
           try {
-            // List subscriptions for this customer
+            // First check for active subscriptions
             const customerSubs = await stripe.subscriptions.list({
               customer: existing.stripeCustomerId,
-              status: "active",
-              limit: 1,
+              limit: 10,
             });
 
-            if (customerSubs.data.length > 0) {
-              const stripeSub = customerSubs.data[0] as unknown as { id: string; start_date: number; current_period_end: number; status: string };
+            // Find the best subscription (prefer active, then trialing, then any non-canceled)
+            const activeSub = customerSubs.data.find(s => s.status === "active")
+              || customerSubs.data.find(s => s.status === "trialing")
+              || customerSubs.data.find(s => s.status !== "canceled" && s.status !== "incomplete_expired");
+
+            if (activeSub) {
+              const stripeSub = activeSub as unknown as { id: string; start_date: number; current_period_end: number; status: string };
               const startedAt = stripeSub.start_date * 1000;
               const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
 
               await updateSubscription(userId, {
                 stripeSubscriptionId: stripeSub.id,
-                status: "active",
+                status: stripeSub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
                 startedAt,
                 initialPeriodEndsAt,
                 isInInitialPeriod: true,
                 currentPeriodEnd: stripeSub.current_period_end * 1000,
               });
-              console.log("[VerifySession] Synced active subscription from Stripe customer for user:", userId);
-              return { status: "active", synced: true };
+              console.log("[VerifySession] Synced subscription from Stripe customer for user:", userId, "status:", stripeSub.status);
+              return { status: stripeSub.status, synced: true };
             }
           } catch (err) {
             console.error("[VerifySession] Error checking Stripe customer:", err);
@@ -194,6 +197,74 @@ export const appRouter = router({
 
         return { status: existing?.status || "none", synced: false };
       }),
+
+    // syncFromStripe: Comprehensive sync that checks all Stripe data for this user
+    syncFromStripe: protectedProcedure.mutation(async ({ ctx }) => {
+      const stripe = getStripe();
+      const userId = ctx.user.id;
+      const existing = await getSubscription(userId);
+
+      if (!existing) {
+        return { status: "none", synced: false, message: "サブスクリプションレコードがありません" };
+      }
+
+      if (!existing.stripeCustomerId) {
+        return { status: existing.status, synced: false, message: "Stripe顧客IDがありません" };
+      }
+
+      try {
+        // List all subscriptions for this customer from Stripe
+        const customerSubs = await stripe.subscriptions.list({
+          customer: existing.stripeCustomerId,
+          limit: 10,
+        });
+
+        console.log("[SyncFromStripe] Found", customerSubs.data.length, "subscriptions for customer:", existing.stripeCustomerId);
+
+        if (customerSubs.data.length === 0) {
+          // No subscriptions in Stripe - keep as incomplete
+          return { 
+            status: existing.status, 
+            synced: false, 
+            message: "Stripeにサブスクリプションが見つかりません。決済が完了していない可能性があります。",
+            stripeSubscriptions: 0,
+          };
+        }
+
+        // Find the best subscription
+        const activeSub = customerSubs.data.find(s => s.status === "active")
+          || customerSubs.data.find(s => s.status === "trialing")
+          || customerSubs.data[0]; // fallback to most recent
+
+        const stripeSub = activeSub as unknown as { id: string; start_date: number; current_period_end: number; status: string };
+        const startedAt = stripeSub.start_date * 1000;
+        const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+
+        await updateSubscription(userId, {
+          stripeSubscriptionId: stripeSub.id,
+          status: stripeSub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
+          startedAt,
+          initialPeriodEndsAt,
+          isInInitialPeriod: true,
+          currentPeriodEnd: stripeSub.current_period_end * 1000,
+        });
+
+        console.log("[SyncFromStripe] Updated subscription for user:", userId, "status:", stripeSub.status);
+        return { 
+          status: stripeSub.status, 
+          synced: true, 
+          message: `Stripeから同期しました（ステータス: ${stripeSub.status}）`,
+          stripeSubscriptions: customerSubs.data.length,
+        };
+      } catch (err) {
+        console.error("[SyncFromStripe] Error:", err);
+        return { 
+          status: existing.status, 
+          synced: false, 
+          message: "Stripeとの同期中にエラーが発生しました",
+        };
+      }
+    }),
 
     createCheckoutSession: protectedProcedure.mutation(async ({ ctx }) => {
       const stripe = getStripe();
@@ -208,9 +279,11 @@ export const appRouter = router({
         });
       }
 
-      // Create or get Stripe customer
+      // Reuse existing Stripe customer if available, or create a new one
       let customerId = existingSubscription?.stripeCustomerId;
+      
       if (!customerId) {
+        // No existing record or no customer ID - create new customer
         const customer = await stripe.customers.create({
           email: ctx.user.email ?? undefined,
           name: ctx.user.name ?? undefined,
@@ -219,12 +292,64 @@ export const appRouter = router({
           },
         });
         customerId = customer.id;
+        console.log("[CreateCheckout] Created new Stripe customer:", customerId, "for user:", ctx.user.id);
+      } else {
+        console.log("[CreateCheckout] Reusing existing Stripe customer:", customerId, "for user:", ctx.user.id);
+        
+        // If existing subscription is incomplete/canceled/incomplete_expired, 
+        // check if there are any active subscriptions in Stripe first
+        if (existingSubscription && (
+          existingSubscription.status === "incomplete" || 
+          existingSubscription.status === "canceled" || 
+          existingSubscription.status === "incomplete_expired"
+        )) {
+          try {
+            const existingSubs = await stripe.subscriptions.list({
+              customer: customerId,
+              status: "active",
+              limit: 1,
+            });
+            
+            if (existingSubs.data.length > 0) {
+              // There's already an active subscription in Stripe - sync it
+              const stripeSub = existingSubs.data[0] as unknown as { id: string; start_date: number; current_period_end: number; status: string };
+              const startedAt = stripeSub.start_date * 1000;
+              const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+              
+              await updateSubscription(ctx.user.id, {
+                stripeSubscriptionId: stripeSub.id,
+                status: "active",
+                startedAt,
+                initialPeriodEndsAt,
+                isInInitialPeriod: true,
+                currentPeriodEnd: stripeSub.current_period_end * 1000,
+              });
+              
+              console.log("[CreateCheckout] Found active subscription in Stripe, synced:", stripeSub.id);
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "既にアクティブなサブスクリプションがあります。ページを更新してください。",
+              });
+            }
+          } catch (err) {
+            if (err instanceof TRPCError) throw err;
+            console.error("[CreateCheckout] Error checking existing Stripe subscriptions:", err);
+          }
+        }
+      }
 
-        // Create subscription record
+      // Create or update subscription record in DB (incomplete state)
+      if (!existingSubscription) {
         await createSubscription({
           userId: ctx.user.id,
           stripeCustomerId: customerId,
           status: "incomplete",
+        });
+        console.log("[CreateCheckout] Created new subscription record for user:", ctx.user.id);
+      } else if (!existingSubscription.stripeCustomerId) {
+        // Update existing record with customer ID if it was missing
+        await updateSubscription(ctx.user.id, {
+          stripeCustomerId: customerId,
         });
       }
 
@@ -261,6 +386,7 @@ export const appRouter = router({
         },
       });
 
+      console.log("[CreateCheckout] Created checkout session:", session.id, "for user:", ctx.user.id);
       return { url: session.url };
     }),
 
@@ -354,6 +480,113 @@ export const appRouter = router({
           success: true,
           message: "サブスクリプションが解約されました。",
         };
+      }),
+  }),
+
+  // Admin Router for subscription management
+  admin: router({
+    // List all subscriptions with user info
+    listSubscriptions: adminProcedure.query(async () => {
+      const results = await getAllSubscriptionsWithUsers();
+      return results.map(r => ({
+        id: r.subscription.id,
+        userId: r.subscription.userId,
+        userName: r.userName,
+        userEmail: r.userEmail,
+        stripeCustomerId: r.subscription.stripeCustomerId,
+        stripeSubscriptionId: r.subscription.stripeSubscriptionId,
+        status: r.subscription.status,
+        startedAt: r.subscription.startedAt,
+        currentPeriodEnd: r.subscription.currentPeriodEnd,
+        canceledAt: r.subscription.canceledAt,
+        isInInitialPeriod: r.subscription.isInInitialPeriod,
+        createdAt: r.subscription.createdAt,
+        updatedAt: r.subscription.updatedAt,
+      }));
+    }),
+
+    // Sync a specific user's subscription from Stripe
+    syncSubscription: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        const stripe = getStripe();
+        const existing = await getSubscription(input.userId);
+        
+        if (!existing) {
+          return { success: false, message: "サブスクリプションレコードが見つかりません" };
+        }
+
+        if (!existing.stripeCustomerId) {
+          return { success: false, message: "Stripe顧客IDがありません" };
+        }
+
+        try {
+          const customerSubs = await stripe.subscriptions.list({
+            customer: existing.stripeCustomerId,
+            limit: 10,
+          });
+
+          if (customerSubs.data.length === 0) {
+            return { success: false, message: "Stripeにサブスクリプションが見つかりません" };
+          }
+
+          const activeSub = customerSubs.data.find(s => s.status === "active")
+            || customerSubs.data.find(s => s.status === "trialing")
+            || customerSubs.data[0];
+
+          const stripeSub = activeSub as unknown as { id: string; start_date: number; current_period_end: number; status: string };
+          const startedAt = stripeSub.start_date * 1000;
+          const initialPeriodEndsAt = startedAt + (SUBSCRIPTION_PLAN.initialPeriodMonths * 30 * 24 * 60 * 60 * 1000);
+
+          await updateSubscription(input.userId, {
+            stripeSubscriptionId: stripeSub.id,
+            status: stripeSub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "incomplete_expired" | "unpaid",
+            startedAt,
+            initialPeriodEndsAt,
+            isInInitialPeriod: true,
+            currentPeriodEnd: stripeSub.current_period_end * 1000,
+          });
+
+          return { 
+            success: true, 
+            message: `同期完了: ${stripeSub.status}`,
+            stripeStatus: stripeSub.status,
+          };
+        } catch (err) {
+          console.error("[AdminSync] Error:", err);
+          return { success: false, message: "Stripeとの同期中にエラーが発生しました" };
+        }
+      }),
+
+    // Reset a subscription (delete the record so user can start fresh)
+    resetSubscription: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        try {
+          await deleteSubscription(input.userId);
+          return { success: true, message: "サブスクリプションレコードを削除しました" };
+        } catch (err) {
+          console.error("[AdminReset] Error:", err);
+          return { success: false, message: "削除に失敗しました" };
+        }
+      }),
+
+    // Force update subscription status
+    forceUpdateStatus: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        status: z.enum(["active", "canceled", "past_due", "trialing", "incomplete", "incomplete_expired", "unpaid"]),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          await updateSubscription(input.userId, {
+            status: input.status,
+          });
+          return { success: true, message: `ステータスを${input.status}に更新しました` };
+        } catch (err) {
+          console.error("[AdminForceUpdate] Error:", err);
+          return { success: false, message: "更新に失敗しました" };
+        }
       }),
   }),
 
