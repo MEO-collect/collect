@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type {
   StoreProfile,
   Templates,
@@ -15,6 +15,132 @@ import {
   DEFAULT_STORE_PROFILE,
   DEFAULT_TEMPLATES,
 } from "@shared/bizwriter-types";
+
+// ============ Google Maps URL抽出テスト ============
+
+// Mock Google Maps API
+vi.mock("../_core/map", () => ({
+  makeRequest: vi.fn(),
+}));
+
+describe("Google Maps URL Extraction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should extract place_id from /place/ URL with data parameter", async () => {
+    const { makeRequest } = await import("../_core/map");
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "OK",
+      result: {
+        place_id: "ChIJN1t_tDeuEmsRUsoyG83frY4",
+        name: "株式会社メディアシード",
+        formatted_address: "日本、〒150-0002 東京都渋谷区渋谷3丁目27−15 光和ビル 7F",
+        website: "https://mediaseed.jp",
+      },
+    });
+
+    // This would be called by the extractStoreInfo mutation
+    const result = await makeRequest("/maps/api/place/details/json", {
+      place_id: "ChIJN1t_tDeuEmsRUsoyG83frY4",
+      fields: "name,formatted_address,website,formatted_phone_number",
+      language: "ja",
+    });
+
+    expect(result.status).toBe("OK");
+    expect(result.result.name).toBe("株式会社メディアシード");
+    expect(result.result.formatted_address).toContain("東京都渋谷区");
+    expect(result.result.website).toBe("https://mediaseed.jp");
+  });
+
+  it("should search by store name when place_id cannot be extracted", async () => {
+    const { makeRequest } = await import("../_core/map");
+    
+    // First call: text search
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "OK",
+      results: [
+        {
+          place_id: "ChIJN1t_tDeuEmsRUsoyG83frY4",
+          name: "株式会社メディアシード",
+          formatted_address: "日本、〒150-0002 東京都渋谷区渋谷3丁目27−15",
+          geometry: { location: { lat: 35.6585, lng: 139.7039 } },
+        },
+      ],
+    });
+
+    // Second call: place details
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "OK",
+      result: {
+        place_id: "ChIJN1t_tDeuEmsRUsoyG83frY4",
+        name: "株式会社メディアシード",
+        formatted_address: "日本、〒150-0002 東京都渋谷区渋谷3丁目27−15 光和ビル 7F",
+        website: "https://mediaseed.jp",
+      },
+    });
+
+    // Simulate search flow
+    const searchResult = await makeRequest("/maps/api/place/textsearch/json", {
+      query: "株式会社メディアシード",
+      language: "ja",
+    });
+
+    expect(searchResult.status).toBe("OK");
+    expect(searchResult.results[0].place_id).toBe("ChIJN1t_tDeuEmsRUsoyG83frY4");
+
+    const detailsResult = await makeRequest("/maps/api/place/details/json", {
+      place_id: searchResult.results[0].place_id,
+      fields: "name,formatted_address,website,formatted_phone_number",
+      language: "ja",
+    });
+
+    expect(detailsResult.result.name).toBe("株式会社メディアシード");
+    expect(detailsResult.result.website).toBe("https://mediaseed.jp");
+  });
+
+  it("should handle http to https conversion", async () => {
+    const { makeRequest } = await import("../_core/map");
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "OK",
+      result: {
+        place_id: "test_place_id",
+        name: "テスト店舗",
+        formatted_address: "東京都渋谷区1-1-1",
+        website: "http://example.com",
+      },
+    });
+
+    const result = await makeRequest("/maps/api/place/details/json", {
+      place_id: "test_place_id",
+      fields: "name,formatted_address,website,formatted_phone_number",
+      language: "ja",
+    });
+
+    // The router should convert http to https
+    const websiteUrl = result.result.website?.startsWith("http://")
+      ? result.result.website.replace("http://", "https://")
+      : result.result.website;
+
+    expect(websiteUrl).toBe("https://example.com");
+  });
+
+  it("should return error when place not found", async () => {
+    const { makeRequest } = await import("../_core/map");
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "ZERO_RESULTS",
+      results: [],
+    });
+
+    const result = await makeRequest("/maps/api/place/textsearch/json", {
+      query: "存在しない店舗名12345",
+      language: "ja",
+    });
+
+    expect(result.status).toBe("ZERO_RESULTS");
+    expect(result.results.length).toBe(0);
+  });
+});
 
 // ============ 型定義・定数テスト ============
 

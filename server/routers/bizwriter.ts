@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
+import { makeRequest, type PlaceDetailsResult, type PlacesSearchResult } from "../_core/map";
 import type { StoreProfile, GeneratedContent, OutputFormat, Tone, Templates } from "@shared/bizwriter-types";
 import { FORMAT_CHAR_LIMITS } from "@shared/bizwriter-types";
 
@@ -153,47 +154,137 @@ ${siteInfoRestriction}
 - suggestionsには投稿をより効果的にするための提案を記載してください。`;
 }
 
+/**
+ * Extract place_id from various Google Maps URL formats
+ */
+function extractPlaceIdFromUrl(url: string): string | null {
+  try {
+    // Pattern 1: Short URL (maps.app.goo.gl) - cannot extract place_id directly, need to resolve
+    if (url.includes("maps.app.goo.gl") || url.includes("goo.gl")) {
+      return null; // Will be handled by search fallback
+    }
+
+    // Pattern 2: /place/ URL with data parameter containing place_id
+    // Example: /maps/place/.../@...data=!4m2!3m1!1s0x0:0xe82d3e4235aebc2f
+    const dataMatch = url.match(/data=.*?1s([^?&:]+)/);
+    if (dataMatch) {
+      return dataMatch[1];
+    }
+
+    // Pattern 3: /search URL with place_id in ludocid or ftid
+    const ludocidMatch = url.match(/ludocid[=:]([^&?]+)/);
+    if (ludocidMatch) {
+      // ludocid is a numeric ID, convert to place_id format
+      return null; // Will use search fallback
+    }
+
+    // Pattern 4: Direct place_id parameter
+    const placeIdMatch = url.match(/place_id=([^&?]+)/);
+    if (placeIdMatch) {
+      return placeIdMatch[1];
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[BizWriter] extractPlaceIdFromUrl error:", error);
+    return null;
+  }
+}
+
+/**
+ * Extract store name from Google Maps URL for search fallback
+ */
+function extractStoreNameFromUrl(url: string): string | null {
+  try {
+    // Pattern 1: /place/店舗名/
+    const placeMatch = url.match(/\/place\/([^/@?]+)/);
+    if (placeMatch) {
+      return decodeURIComponent(placeMatch[1].replace(/\+/g, " "));
+    }
+
+    // Pattern 2: /search?q=店舗名
+    const searchMatch = url.match(/[?&]q=([^&]+)/);
+    if (searchMatch) {
+      return decodeURIComponent(searchMatch[1].replace(/\+/g, " "));
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[BizWriter] extractStoreNameFromUrl error:", error);
+    return null;
+  }
+}
+
+/**
+ * Extract store information from Google Maps URL using Google Maps API
+ */
 async function extractStoreInfoFromMaps(mapsUrl: string): Promise<{
   storeName: string;
   address: string;
   websiteUrl: string;
 } | null> {
   try {
-    const result = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: `あなたはGoogleマップのURLから店舗情報を抽出するアシスタントです。
-指定されたGoogleマップのURLを確認し、以下の情報をJSON形式で返してください。
+    console.log("[BizWriter] Extracting store info from URL:", mapsUrl);
 
-出力形式（必ずこのJSON形式のみを返してください）:
-{
-  "storeName": "店舗名",
-  "address": "住所",
-  "websiteUrl": "公式サイトURL"
-}
+    // Step 1: Try to extract place_id directly from URL
+    let placeId = extractPlaceIdFromUrl(mapsUrl);
 
-情報が見つからない場合は空文字列を入れてください。`,
-        },
+    // Step 2: If no place_id found, try to extract store name and search
+    if (!placeId) {
+      const storeName = extractStoreNameFromUrl(mapsUrl);
+      if (!storeName) {
+        console.error("[BizWriter] Could not extract place_id or store name from URL");
+        return null;
+      }
+
+      console.log("[BizWriter] Searching for place:", storeName);
+
+      // Use Place Search API to find the place
+      const searchResult = await makeRequest<PlacesSearchResult>(
+        "/maps/api/place/textsearch/json",
         {
-          role: "user",
-          content: `以下のGoogleマップURLから店舗情報を抽出してください: ${mapsUrl}`,
-        },
-      ],
+          query: storeName,
+          language: "ja",
+        }
+      );
+
+      if (searchResult.status !== "OK" || !searchResult.results || searchResult.results.length === 0) {
+        console.error("[BizWriter] Place search failed:", searchResult.status);
+        return null;
+      }
+
+      placeId = searchResult.results[0].place_id;
+      console.log("[BizWriter] Found place_id via search:", placeId);
+    }
+
+    // Step 3: Get detailed information using Place Details API
+    console.log("[BizWriter] Fetching place details for:", placeId);
+    const detailsResult = await makeRequest<PlaceDetailsResult>(
+      "/maps/api/place/details/json",
+      {
+        place_id: placeId,
+        fields: "name,formatted_address,website,formatted_phone_number",
+        language: "ja",
+      }
+    );
+
+    if (detailsResult.status !== "OK" || !detailsResult.result) {
+      console.error("[BizWriter] Place details failed:", detailsResult.status);
+      return null;
+    }
+
+    const place = detailsResult.result;
+    console.log("[BizWriter] Successfully retrieved place details:", {
+      name: place.name,
+      address: place.formatted_address,
+      website: place.website,
     });
 
-    const content =
-      typeof result.choices[0]?.message?.content === "string"
-        ? result.choices[0].message.content
-        : "";
-
-    // Markdown記法を除去してJSONをパース
-    const cleaned = content
-      .replace(/```json\s*/g, "")
-      .replace(/```\s*/g, "")
-      .trim();
-
-    return JSON.parse(cleaned);
+    return {
+      storeName: place.name || "",
+      address: place.formatted_address || "",
+      websiteUrl: place.website || "",
+    };
   } catch (error) {
     console.error("[BizWriter] extractStoreInfoFromMaps error:", error);
     return null;
@@ -285,7 +376,7 @@ export const bizwriterRouter = router({
     .mutation(async ({ input }) => {
       const result = await extractStoreInfoFromMaps(input.mapsUrl);
       if (!result) {
-        return { success: false as const, error: "店舗情報を取得できませんでした" };
+        return { success: false as const, error: "店舗情報を取得できませんでした。GoogleマップのURLが正しいか確認してください。" };
       }
       // http→https自動変換
       if (result.websiteUrl && result.websiteUrl.startsWith("http://")) {

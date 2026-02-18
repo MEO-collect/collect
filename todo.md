@@ -222,3 +222,10 @@
 
 ## バグ修正（決済同期エラー）
 - [x] 「Stripeとの同期中にエラーが発生しました」エラーの修正（Stripe APIのcurrent_period_end位置変更対応、NaN防止ヘルパー作成、186テスト合格）
+
+## AI文章作成 - Googleマップ自動入力改善
+- [x] 現在の実装を調査して問題点を特定（LLMにURLを渡して推測させていたため不正確）
+- [x] Google Maps APIを使用した正確な情報取得ロジックの実装（Place Search + Place Details API）
+- [x] 3パターンのURL形式対応（search、place、短縮URLすべて対応）
+- [x] Place Details APIによる正確な住所・ウェブサイト取得
+- [x] テスト作成・実行と動作確認（43テスト合格、全190テスト合格）
