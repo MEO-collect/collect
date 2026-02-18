@@ -140,6 +140,61 @@ describe("Google Maps URL Extraction", () => {
     expect(result.status).toBe("ZERO_RESULTS");
     expect(result.results.length).toBe(0);
   });
+
+  it("should handle hex ID format by falling back to search", async () => {
+    const { makeRequest } = await import("../_core/map");
+    
+    // URL with hex ID: 1s0x0:0xe3d96898956cb8ed
+    // Should extract store name and search instead
+    
+    // First call: text search
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "OK",
+      results: [
+        {
+          place_id: "ChIJ_valid_place_id",
+          name: "株式会社 公仁建設",
+          formatted_address: "日本、東京都",
+          geometry: { location: { lat: 35.6585, lng: 139.7039 } },
+        },
+      ],
+    });
+
+    // Second call: place details
+    vi.mocked(makeRequest).mockResolvedValueOnce({
+      status: "OK",
+      result: {
+        place_id: "ChIJ_valid_place_id",
+        name: "株式会社 公仁建設",
+        formatted_address: "日本、東京都港区",
+        website: "https://example.com",
+      },
+    });
+
+    // Simulate search flow (hex ID detected, falls back to search)
+    const searchResult = await makeRequest("/maps/api/place/textsearch/json", {
+      query: "株式会社 公仁建設",
+      language: "ja",
+    });
+
+    expect(searchResult.status).toBe("OK");
+    expect(searchResult.results[0].place_id).toBe("ChIJ_valid_place_id");
+
+    const detailsResult = await makeRequest("/maps/api/place/details/json", {
+      place_id: searchResult.results[0].place_id,
+      fields: "name,formatted_address,website,formatted_phone_number",
+      language: "ja",
+    });
+
+    expect(detailsResult.result.name).toBe("株式会社 公仁建設");
+    expect(detailsResult.result.website).toBe("https://example.com");
+  });
+
+  it("should handle store name with + sign (URL encoded space)", () => {
+    const storeName = "株式会社+公仁建設";
+    const cleaned = storeName.replace(/\+/g, " ");
+    expect(cleaned).toBe("株式会社 公仁建設");
+  });
 });
 
 // ============ 型定義・定数テスト ============

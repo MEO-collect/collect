@@ -155,30 +155,51 @@ ${siteInfoRestriction}
 }
 
 /**
+ * Resolve short URL to full URL by following redirects
+ */
+async function resolveShortUrl(shortUrl: string): Promise<string | null> {
+  try {
+    console.log("[BizWriter] Resolving short URL:", shortUrl);
+    const response = await fetch(shortUrl, {
+      method: "HEAD",
+      redirect: "follow",
+    });
+    const resolvedUrl = response.url;
+    console.log("[BizWriter] Resolved to:", resolvedUrl);
+    return resolvedUrl;
+  } catch (error) {
+    console.error("[BizWriter] resolveShortUrl error:", error);
+    return null;
+  }
+}
+
+/**
  * Extract place_id from various Google Maps URL formats
  */
 function extractPlaceIdFromUrl(url: string): string | null {
   try {
-    // Pattern 1: Short URL (maps.app.goo.gl) - cannot extract place_id directly, need to resolve
-    if (url.includes("maps.app.goo.gl") || url.includes("goo.gl")) {
-      return null; // Will be handled by search fallback
-    }
-
-    // Pattern 2: /place/ URL with data parameter containing place_id
-    // Example: /maps/place/.../@...data=!4m2!3m1!1s0x0:0xe82d3e4235aebc2f
-    const dataMatch = url.match(/data=.*?1s([^?&:]+)/);
+    // Pattern 1: /place/ URL with data parameter containing place_id
+    // Example: /maps/place/.../@...data=!4m2!3m1!1sChIJN1t_tDeuEmsRUsoyG83frY4
+    // Note: Hex IDs like 0x0:0xe82d3e4235aebc2f are NOT valid place_ids
+    const dataMatch = url.match(/data=.*?1s([^?&:\s]+)/);
     if (dataMatch) {
-      return dataMatch[1];
+      const extractedId = dataMatch[1];
+      // Check if it's a hex ID (starts with 0x)
+      if (extractedId.startsWith("0x")) {
+        console.log("[BizWriter] Detected hex ID (not a place_id):", extractedId);
+        return null; // Will use search fallback
+      }
+      return extractedId;
     }
 
-    // Pattern 3: /search URL with place_id in ludocid or ftid
+    // Pattern 2: /search URL with place_id in ludocid or ftid
     const ludocidMatch = url.match(/ludocid[=:]([^&?]+)/);
     if (ludocidMatch) {
-      // ludocid is a numeric ID, convert to place_id format
+      // ludocid is a numeric ID, not a place_id
       return null; // Will use search fallback
     }
 
-    // Pattern 4: Direct place_id parameter
+    // Pattern 3: Direct place_id parameter
     const placeIdMatch = url.match(/place_id=([^&?]+)/);
     if (placeIdMatch) {
       return placeIdMatch[1];
@@ -226,12 +247,24 @@ async function extractStoreInfoFromMaps(mapsUrl: string): Promise<{
   try {
     console.log("[BizWriter] Extracting store info from URL:", mapsUrl);
 
+    let workingUrl = mapsUrl;
+
+    // Step 0: If short URL, resolve it first
+    if (mapsUrl.includes("maps.app.goo.gl") || mapsUrl.includes("goo.gl")) {
+      const resolved = await resolveShortUrl(mapsUrl);
+      if (!resolved) {
+        console.error("[BizWriter] Could not resolve short URL");
+        return null;
+      }
+      workingUrl = resolved;
+    }
+
     // Step 1: Try to extract place_id directly from URL
-    let placeId = extractPlaceIdFromUrl(mapsUrl);
+    let placeId = extractPlaceIdFromUrl(workingUrl);
 
     // Step 2: If no place_id found, try to extract store name and search
     if (!placeId) {
-      const storeName = extractStoreNameFromUrl(mapsUrl);
+      const storeName = extractStoreNameFromUrl(workingUrl);
       if (!storeName) {
         console.error("[BizWriter] Could not extract place_id or store name from URL");
         return null;
