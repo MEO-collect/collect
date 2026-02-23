@@ -62,7 +62,7 @@ export default function GeneratorScreen({
   const [targetLength, setTargetLength] = useState<TargetLengthOption>("推奨");
   const [customLength, setCustomLength] = useState<number>(500);
   const [useTemplates, setUseTemplates] = useState(false);
-  const [checkConsistency, setCheckConsistency] = useState(false);
+  const [avoidRepetition, setAvoidRepetition] = useState(false);
   const [useOnlySiteInfo, setUseOnlySiteInfo] = useState(false);
 
   const generateMutation = trpc.bizwriter.generate.useMutation();
@@ -108,13 +108,6 @@ export default function GeneratorScreen({
       if (!confirmed) return;
     }
 
-    // 過去の投稿を参照用に取得
-    const historyTexts = checkConsistency
-      ? history
-          .slice(0, 3)
-          .map((h) => h.results.map((r) => r.content).join("\n"))
-      : [];
-
     try {
       const result = await generateMutation.mutateAsync({
         profile,
@@ -126,7 +119,8 @@ export default function GeneratorScreen({
         useOnlySiteInfo,
         templates: useTemplates ? templates : null,
         useTemplates,
-        history: historyTexts,
+        history: [], // avoidRepetitionがtrueの場合はバックエンドで自動取得
+        avoidRepetition,
       });
       onGenerated(topic.trim(), result.results);
       toast.success("文章を生成しました");
@@ -275,14 +269,14 @@ export default function GeneratorScreen({
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">過去の投稿と一貫性を保つ</p>
+              <p className="text-sm font-medium">バリエーション生成</p>
               <p className="text-xs text-muted-foreground">
-                直近の投稿を参照してトーンを揃える
+                過去の投稿と表現を変えつつ、店舗情報の矛盾を避ける
               </p>
             </div>
             <Switch
-              checked={checkConsistency}
-              onCheckedChange={setCheckConsistency}
+              checked={avoidRepetition}
+              onCheckedChange={setAvoidRepetition}
             />
           </div>
 

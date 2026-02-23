@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, memberProfiles, subscriptions, InsertMemberProfile, InsertSubscription } from "../drizzle/schema";
+import { InsertUser, users, memberProfiles, subscriptions, InsertMemberProfile, InsertSubscription, generatedContents, InsertGeneratedContent } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -188,4 +188,37 @@ export async function getAllSubscriptionsWithUsers() {
     .from(subscriptions)
     .leftJoin(users, eq(subscriptions.userId, users.id));
   return result;
+}
+
+// ============ Generated Contents Helpers ============
+
+export async function saveGeneratedContent(content: InsertGeneratedContent): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save generated content: database not available");
+    return;
+  }
+  await db.insert(generatedContents).values(content);
+}
+
+export async function getRecentGeneratedContents(
+  userId: number,
+  storeProfileHash: string,
+  format: string,
+  limit: number = 5
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(generatedContents)
+    .where(
+      and(
+        eq(generatedContents.userId, userId),
+        eq(generatedContents.storeProfileHash, storeProfileHash),
+        eq(generatedContents.format, format)
+      )
+    )
+    .orderBy(desc(generatedContents.createdAt))
+    .limit(limit);
 }

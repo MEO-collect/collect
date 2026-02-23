@@ -15,6 +15,13 @@
       "when": 1768209213134,
       "tag": "0001_green_wrecking_crew",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771828238741,
+      "tag": "0002_youthful_iceman",
+      "breakpoints": true
     }
   ]
 }

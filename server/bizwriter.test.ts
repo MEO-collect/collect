@@ -618,3 +618,109 @@ describe("LocalStorage Serialization", () => {
     }
   });
 });
+
+// ============ バリエーション生成機能テスト ============
+
+// Mock db functions
+vi.mock("../db", () => ({
+  saveGeneratedContent: vi.fn(),
+  getRecentGeneratedContents: vi.fn(),
+}));
+
+describe("Variation Generation Feature", () => {
+  it("should save generated content to database when avoidRepetition is true", async () => {
+    const { saveGeneratedContent } = await import("../db");
+    const mockSave = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(saveGeneratedContent).mockImplementation(mockSave);
+
+    const testContent = {
+      userId: 1,
+      storeProfileHash: "test-hash-123",
+      format: "Instagram投稿文",
+      generatedText: "テスト投稿文です。#テスト #AI文章作成",
+      charCount: 25,
+    };
+
+    await saveGeneratedContent(testContent);
+
+    expect(mockSave).toHaveBeenCalledWith(testContent);
+    expect(mockSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("should retrieve recent generated contents for variation", async () => {
+    const { getRecentGeneratedContents } = await import("../db");
+    vi.clearAllMocks();
+    const mockGet = vi.fn().mockResolvedValue([
+      {
+        id: 1,
+        userId: 1,
+        storeProfileHash: "test-hash-123",
+        format: "Instagram投稿文",
+        generatedText: "過去の投稿文1",
+        charCount: 10,
+        createdAt: new Date("2026-02-20"),
+      },
+      {
+        id: 2,
+        userId: 1,
+        storeProfileHash: "test-hash-123",
+        format: "Instagram投稿文",
+        generatedText: "過去の投稿文2",
+        charCount: 10,
+        createdAt: new Date("2026-02-21"),
+      },
+    ]);
+    vi.mocked(getRecentGeneratedContents).mockImplementation(mockGet);
+
+    const results = await getRecentGeneratedContents(
+      1,
+      "test-hash-123",
+      "Instagram投稿文",
+      5
+    );
+
+    expect(results).toHaveLength(2);
+    expect(results[0].generatedText).toBe("過去の投稿文1");
+    expect(mockGet).toHaveBeenCalledWith(1, "test-hash-123", "Instagram投稿文", 5);
+  });
+
+  it("should create consistent store profile hash for same profile", async () => {
+    const crypto = await import("crypto");
+    
+    const profile1 = {
+      storeName: "テスト店舗",
+      industry: "飲食店",
+      address: "東京都渋谷区",
+    };
+    
+    const profile2 = {
+      storeName: "テスト店舗",
+      industry: "飲食店",
+      address: "東京都渋谷区",
+    };
+
+    const hash1 = crypto.createHash("sha256").update(JSON.stringify(profile1)).digest("hex");
+    const hash2 = crypto.createHash("sha256").update(JSON.stringify(profile2)).digest("hex");
+
+    expect(hash1).toBe(hash2);
+  });
+
+  it("should create different hashes for different profiles", async () => {
+    const crypto = await import("crypto");
+    
+    const profile1 = {
+      storeName: "テスト店舗A",
+      industry: "飲食店",
+    };
+    
+    const profile2 = {
+      storeName: "テスト店舗B",
+      industry: "飲食店",
+    };
+
+    const hash1 = crypto.createHash("sha256").update(JSON.stringify(profile1)).digest("hex");
+    const hash2 = crypto.createHash("sha256").update(JSON.stringify(profile2)).digest("hex");
+
+    expect(hash1).not.toBe(hash2);
+  });
+});

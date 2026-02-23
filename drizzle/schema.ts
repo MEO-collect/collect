@@ -74,3 +74,24 @@ export const subscriptions = mysqlTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+/**
+ * Generated contents table for BizWriter
+ * Stores history of AI-generated content to avoid repetition
+ */
+export const generatedContents = mysqlTable("generated_contents", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  /** Store profile JSON (for matching similar generation requests) */
+  storeProfileHash: varchar("storeProfileHash", { length: 64 }).notNull(),
+  /** Output format (Instagram投稿文, 公式LINE配信文, etc.) */
+  format: varchar("format", { length: 100 }).notNull(),
+  /** Generated text content */
+  generatedText: text("generatedText").notNull(),
+  /** Character count */
+  charCount: int("charCount").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type GeneratedContent = typeof generatedContents.$inferSelect;
+export type InsertGeneratedContent = typeof generatedContents.$inferInsert;

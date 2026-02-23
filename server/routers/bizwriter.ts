@@ -86,7 +86,8 @@ function buildSystemPrompt(
   customLength: number | undefined,
   useOnlySiteInfo: boolean,
   templates: Templates | null,
-  useTemplates: boolean
+  useTemplates: boolean,
+  avoidRepetition: boolean
 ): string {
   const complianceRules = buildComplianceRules(profile.industry);
 
@@ -114,6 +115,14 @@ ${t.closing ? `締め: 「${t.closing}」` : ""}`;
     ? `\n【重要制約】提供されたURLの情報のみを使用してください。外部知識やハルシネーション（事実でない情報の生成）を絶対に含めないでください。URLから取得できない情報については「情報なし」と明記してください。`
     : "";
 
+  const repetitionAvoidance = avoidRepetition
+    ? `\n【バリエーション生成】過去の投稿が提供されている場合、以下のルールを守ってください:
+- 過去の投稿と同じ表現、フレーズ、文章構成を避ける
+- 店舗情報（営業時間、サービス内容、住所等）に矛盾が生じないよう一貫性を保つ
+- 新しい角度、切り口、表現で同じテーマを伝える
+- 過去の投稿で使われたハッシュタグとは異なるものを選ぶ（関連性は保つ）`
+    : "";
+
   return `あなたはSNS・ブログ・MEO投稿のプロフェッショナルライターです。
 以下の店舗情報とルールに基づき、高品質な投稿文を生成してください。
 
@@ -136,6 +145,7 @@ ${complianceRules}
 ${formatInstructions}
 ${templateInstructions}
 ${siteInfoRestriction}
+${repetitionAvoidance}
 
 【出力フォーマット】
 必ず以下のJSON配列形式で出力してください。他のテキストは一切含めないでください。
@@ -334,7 +344,8 @@ async function generateContent(
   useOnlySiteInfo: boolean,
   templates: Templates | null,
   useTemplates: boolean,
-  history: string[]
+  history: string[],
+  avoidRepetition: boolean
 ): Promise<GeneratedContent[]> {
   const systemPrompt = buildSystemPrompt(
     profile,
@@ -344,7 +355,8 @@ async function generateContent(
     customLength,
     useOnlySiteInfo,
     templates,
-    useTemplates
+    useTemplates,
+    avoidRepetition
   );
 
   let userMessage = `以下のお題で、${formats.join("、")}の投稿文を生成してください。\n\nお題: ${topic}`;
@@ -448,9 +460,30 @@ export const bizwriterRouter = router({
           .default(null),
         useTemplates: z.boolean().default(false),
         history: z.array(z.string()).default([]),
+        avoidRepetition: z.boolean().default(false),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // avoidRepetitionがtrueの場合、過去の生成履歴を自動取得
+      let historyToUse = input.history;
+      if (input.avoidRepetition && input.formats.length > 0) {
+        const crypto = await import("crypto");
+        const storeProfileHash = crypto
+          .createHash("sha256")
+          .update(JSON.stringify(input.profile))
+          .digest("hex");
+        
+        const { getRecentGeneratedContents } = await import("../db");
+        const recentContents = await getRecentGeneratedContents(
+          ctx.user.id,
+          storeProfileHash,
+          input.formats[0],
+          5
+        );
+        
+        historyToUse = recentContents.map((c) => c.generatedText);
+      }
+
       const results = await generateContent(
         input.profile as StoreProfile,
         input.topic,
@@ -461,8 +494,30 @@ export const bizwriterRouter = router({
         input.useOnlySiteInfo,
         input.templates as Templates | null,
         input.useTemplates,
-        input.history
+        historyToUse,
+        input.avoidRepetition
       );
+
+      // 生成成功時にDBに保存
+      if (input.avoidRepetition && results.length > 0) {
+        const crypto = await import("crypto");
+        const storeProfileHash = crypto
+          .createHash("sha256")
+          .update(JSON.stringify(input.profile))
+          .digest("hex");
+        
+        const { saveGeneratedContent } = await import("../db");
+        for (const result of results) {
+          await saveGeneratedContent({
+            userId: ctx.user.id,
+            storeProfileHash,
+            format: result.format,
+            generatedText: result.content,
+            charCount: result.content.length,
+          });
+        }
+      }
+
       return { results };
     }),
 });
