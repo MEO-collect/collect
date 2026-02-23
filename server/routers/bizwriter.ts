@@ -49,7 +49,7 @@ function buildFormatInstructions(format: OutputFormat, targetLength: string, cus
     case "Instagram投稿文":
       formatSpecific = `- Instagram向けの親しみやすい投稿文を作成
 - 適切な改行で読みやすく
-- 関連するハッシュタグを10〜15個提案
+- 関連するハッシュタグを5個まで提案
 - 絵文字を適度に使用`;
       break;
     case "公式LINE配信文":
