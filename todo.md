@@ -254,3 +254,8 @@
 - [x] カラーパレットを白ベースに変更（index.css、OKLCH形式、青色アクセント）
 - [x] AppHome.tsxをクリーンなカードグリッドレイアウトに再設計（hover:shadow-xl、hover:-translate-y-1、アイコン配置）
 - [x] タイポグラフィと余白を調整（text-4xl見出し、p-8カードパディング、適度なgap）
+
+## ルーティング404エラー修正
+- [x] App.tsxのルート設定を確認（/app/voice, /app/bizwriter, /app/image, /app/calendar-qr, /app/shozai-doctor）
+- [x] AppHome.tsxのアプリカードpathをApp.tsxのルートに合わせて修正
+- [x] テストと動作確認（ホーム画面表示成功）
