@@ -151,8 +151,20 @@ export const shozaiRouter = router({
     .mutation(async ({ input }) => {
       const { analysis, profile } = input;
 
+      // 現在の日付を取得（日本時間）
+      const now = new Date();
+      const jstOffset = 9 * 60 * 60 * 1000;
+      const jstDate = new Date(now.getTime() + jstOffset);
+      const currentDateStr = jstDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const currentYear = jstDate.getUTCFullYear();
+      const currentMonth = jstDate.getUTCMonth() + 1;
+
       const prompt = `あなたは中小企業向けの経営コンサルタント「商材ドクター」です。
 以下の情報をもとに、この商材の契約について専門的な診断を行ってください。
+
+【現在の日時情報】
+- 現在の日付: ${currentDateStr}（${currentYear}年${currentMonth}月）
+- この日付を基準に、最新の市場相場・トレンドを考慮して診断してください
 
 【ユーザー属性】
 - 業種: ${profile.industry}
