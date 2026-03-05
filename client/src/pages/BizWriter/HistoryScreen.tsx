@@ -41,28 +41,33 @@ function HistoryItem({
   return (
     <div className="glass-card overflow-hidden">
       {/* ヘッダー */}
-      <button
-        className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/20 transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">{entry.topic}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-muted-foreground">{dateStr}</span>
-            <div className="flex gap-1">
-              {formats.map((f, i) => (
-                <span
-                  key={i}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground"
-                >
-                  {f}
-                </span>
-              ))}
+      <div className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/20 transition-colors">
+        <div
+          role="button"
+          tabIndex={0}
+          className="flex flex-1 min-w-0 items-center gap-3 cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
+          onKeyDown={(e) => e.key === 'Enter' && setExpanded(v => !v)}
+        >
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{entry.topic}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-muted-foreground">{dateStr}</span>
+              <div className="flex gap-1">
+                {formats.map((f, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -93,7 +98,7 @@ function HistoryItem({
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
-      </button>
+      </div>
 
       {/* 展開時の内容 */}
       {expanded && (
