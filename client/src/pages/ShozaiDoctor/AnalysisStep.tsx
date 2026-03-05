@@ -21,6 +21,7 @@ import { ANALYSIS_STATUS_MESSAGES } from "@shared/shozai-types";
 interface AnalysisStepProps {
   files: UploadedFile[];
   profile: UserProfile;
+  companyUrl?: string;
   analysisResult: AnalysisResult | null;
   onAnalysisComplete: (result: AnalysisResult, tokens: TokenUsage) => void;
   onProceed: () => void;
@@ -39,6 +40,7 @@ const SECTION_CONFIG = [
 export function AnalysisStep({
   files,
   profile,
+  companyUrl,
   analysisResult,
   onAnalysisComplete,
   onProceed,
@@ -76,9 +78,10 @@ export function AnalysisStep({
           address: profile.address,
           url: profile.url,
         },
+        companyUrl: companyUrl,
       });
       onAnalysisComplete(result.analysis, result.tokenUsage);
-      toast.success("資料の分析が完了しました");
+      toast.success(companyUrl ? "URLの分析が完了しました" : "資料の分析が完了しました");
     } catch (err) {
       toast.error(
         `分析に失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}`
@@ -86,11 +89,11 @@ export function AnalysisStep({
     } finally {
       setIsAnalyzing(false);
     }
-  }, [files, profile, analyzeMutation, onAnalysisComplete]);
+  }, [files, profile, companyUrl, analyzeMutation, onAnalysisComplete]);
 
   // Auto-start analysis if no result yet
   useEffect(() => {
-    if (!analysisResult && !isAnalyzing && files.length > 0) {
+    if (!analysisResult && !isAnalyzing && (files.length > 0 || companyUrl)) {
       startAnalysis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

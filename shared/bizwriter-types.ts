@@ -3,8 +3,16 @@
 export const INDUSTRIES = ["クリニック", "工務店", "その他"] as const;
 export type Industry = (typeof INDUSTRIES)[number];
 
-export const TONES = ["丁寧", "カジュアル", "やさしい", "専門的", "親しみやすい", "堅め"] as const;
+export const TONES = ["推奨", "丁寧", "カジュアル", "やさしい", "専門的", "親しみやすい", "堅め"] as const;
 export type Tone = (typeof TONES)[number];
+
+// 媒体ごとの推奨トーン
+export const FORMAT_RECOMMENDED_TONES: Record<string, string> = {
+  "Instagram投稿文": "親しみやすい",
+  "公式LINE配信文": "やさしい",
+  "SEOブログ記事": "丁寧",
+  "GBP最新情報": "丁寧",
+};
 
 export const OUTPUT_FORMATS = [
   "Instagram投稿文",
@@ -36,6 +44,14 @@ export interface StoreProfile {
   keywords: string;
   ngWords: string;
   preferredTone: Tone;
+  // 詳細情報（任意）
+  businessHours?: string;
+  specialties?: string;
+  achievements?: string;
+  facilities?: string;
+  access?: string;
+  // 事例（複数）
+  caseStudies?: string[];
 }
 
 export interface GenerationRequest {
@@ -82,6 +98,12 @@ export const DEFAULT_STORE_PROFILE: StoreProfile = {
   keywords: "",
   ngWords: "",
   preferredTone: "丁寧",
+  businessHours: "",
+  specialties: "",
+  achievements: "",
+  facilities: "",
+  access: "",
+  caseStudies: [],
 };
 
 export const DEFAULT_TEMPLATES: Templates = {

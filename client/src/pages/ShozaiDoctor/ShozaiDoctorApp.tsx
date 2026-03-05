@@ -98,6 +98,7 @@ export default function ShozaiDoctorApp() {
   const [profile, setProfile] = useState<UserProfile>(loadProfile);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [companyUrl, setCompanyUrl] = useState<string | undefined>(undefined);
   const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
   const [analysisTokens, setAnalysisTokens] = useState<TokenUsage | null>(null);
   const [diagnosisTokens, setDiagnosisTokens] = useState<TokenUsage | null>(null);
@@ -118,8 +119,9 @@ export default function ShozaiDoctorApp() {
   );
 
   const handleUploadComplete = useCallback(
-    (uploadedFiles: UploadedFile[]) => {
+    (uploadedFiles: UploadedFile[], url?: string) => {
       setFiles(uploadedFiles);
+      setCompanyUrl(url);
       setCurrentStep(3);
       scrollToTop();
     },
@@ -224,6 +226,7 @@ export default function ShozaiDoctorApp() {
             <AnalysisStep
               files={files}
               profile={profile}
+              companyUrl={companyUrl}
               analysisResult={analysisResult}
               onAnalysisComplete={handleAnalysisComplete}
               onProceed={handleProceedToDiagnosis}

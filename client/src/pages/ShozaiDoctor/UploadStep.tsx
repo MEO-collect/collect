@@ -1,17 +1,19 @@
 import { useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, FileText, ImageIcon, X, ArrowLeft, ArrowRight, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Upload, FileText, ImageIcon, X, ArrowLeft, ArrowRight, AlertCircle, Globe, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { UploadedFile } from "@shared/shozai-types";
 
 interface UploadStepProps {
   files: UploadedFile[];
-  onComplete: (files: UploadedFile[]) => void;
+  onComplete: (files: UploadedFile[], companyUrl?: string) => void;
   onBack: () => void;
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
 
 function fileToBase64(file: File): Promise<string> {
@@ -27,6 +29,8 @@ export function UploadStep({ files: initialFiles, onComplete, onBack }: UploadSt
   const [files, setFiles] = useState<UploadedFile[]>(initialFiles);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<"file" | "url">("file");
+  const [companyUrl, setCompanyUrl] = useState("");
 
   const processFiles = useCallback(async (fileList: FileList | File[]) => {
     const arr = Array.from(fileList);
@@ -38,7 +42,7 @@ export function UploadStep({ files: initialFiles, onComplete, onBack }: UploadSt
         continue;
       }
       if (file.size > MAX_FILE_SIZE) {
-        toast.error(`${file.name}: ファイルサイズが10MBを超えています`);
+        toast.error(`${file.name}: ファイルサイズが30MBを超えています`);
         continue;
       }
       try {
@@ -81,11 +85,25 @@ export function UploadStep({ files: initialFiles, onComplete, onBack }: UploadSt
   };
 
   const handleProceed = () => {
-    if (files.length === 0) {
-      toast.error("ファイルを1つ以上アップロードしてください");
-      return;
+    if (mode === "file") {
+      if (files.length === 0) {
+        toast.error("ファイルをで1つ以上アップロードしてください");
+        return;
+      }
+      onComplete(files);
+    } else {
+      if (!companyUrl.trim()) {
+        toast.error("URLを入力してください");
+        return;
+      }
+      try {
+        new URL(companyUrl.trim());
+      } catch {
+        toast.error("有効なURLを入力してください");
+        return;
+      }
+      onComplete([], companyUrl.trim());
     }
-    onComplete(files);
   };
 
   return (
@@ -98,55 +116,106 @@ export function UploadStep({ files: initialFiles, onComplete, onBack }: UploadSt
           <div>
             <CardTitle className="text-lg text-slate-900 dark:text-white">資料アップロード</CardTitle>
             <CardDescription className="text-xs">
-              営業資料・見積書・提案書をアップロードしてください
+              営業資料・見積書・提案書をアップロード、またはURLで診断
             </CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Drop Zone */}
-        <div
-          className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
-            dragActive
-              ? "border-teal-500 bg-teal-50 dark:bg-teal-950/30"
-              : "border-slate-300 dark:border-slate-600 hover:border-teal-400 hover:bg-teal-50/50 dark:hover:bg-teal-950/20"
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragActive(true);
-          }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".png,.jpg,.jpeg,.webp,.pdf"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files) processFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-100 to-indigo-100 dark:from-teal-900/50 dark:to-indigo-900/50 flex items-center justify-center">
-              <Upload className="h-7 w-7 text-teal-600 dark:text-teal-400" />
+        {/* モード切り替え */}
+        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600">
+          <button
+            onClick={() => setMode("file")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
+              mode === "file"
+                ? "bg-indigo-600 text-white"
+                : "bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600"
+            }`}
+          >
+            <Upload className="h-4 w-4" />
+            資料アップロード
+          </button>
+          <button
+            onClick={() => setMode("url")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
+              mode === "url"
+                ? "bg-indigo-600 text-white"
+                : "bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600"
+            }`}
+          >
+            <Globe className="h-4 w-4" />
+            URLで診断
+          </button>
+        </div>
+        {/* URLモード入力 */}
+        {mode === "url" && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5 text-indigo-500" />
+                会社ホームページURL
+              </Label>
+              <Input
+                value={companyUrl}
+                onChange={(e) => setCompanyUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="bg-white dark:bg-slate-700 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600"
+              />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                ファイルをドラッグ＆ドロップ
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                またはクリックして選択（PNG/JPG/PDF・10MB以下）
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+              <LinkIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                会社ホームページのURLを入力すると、AIがページ内容を取得して商材・サービス内容を診断します。
               </p>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* File List */}
-        {files.length > 0 && (
+        {/* Drop Zone - ファイルモードのみ表示 */}
+        {mode === "file" && (
+          <div
+            className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+              dragActive
+                ? "border-teal-500 bg-teal-50 dark:bg-teal-950/30"
+                : "border-slate-300 dark:border-slate-600 hover:border-teal-400 hover:bg-teal-50/50 dark:hover:bg-teal-950/20"
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp,.pdf"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) processFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-100 to-indigo-100 dark:from-teal-900/50 dark:to-indigo-900/50 flex items-center justify-center">
+                <Upload className="h-7 w-7 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  ファイルをドラッグ＆ドロップ
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  またはクリックして選択（PNG/JPG/PDF・30MB以下）
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* File List - ファイルモードのみ */}
+        {mode === "file" && files.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
               アップロード済み（{files.length}件）

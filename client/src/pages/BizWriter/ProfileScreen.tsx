@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MapPin, Globe, Loader2, CheckCircle2 } from "lucide-react";
+import { MapPin, Globe, Loader2, CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import type { StoreProfile, Industry, Tone } from "@shared/bizwriter-types";
@@ -23,6 +23,7 @@ interface ProfileScreenProps {
 
 export default function ProfileScreen({ profile, onUpdate }: ProfileScreenProps) {
   const [mapsUrl, setMapsUrl] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const extractMutation = trpc.bizwriter.extractStoreInfo.useMutation();
 
   const handleChange = (field: keyof StoreProfile, value: string) => {
@@ -235,6 +236,137 @@ export default function ProfileScreen({ profile, onUpdate }: ProfileScreenProps)
           <CheckCircle2 className="h-4 w-4" />
           <span>変更は自動保存されます</span>
         </div>
+      </div>
+
+      {/* 詳細情報（任意） */}
+      <div className="glass-card p-5">
+        <button
+          type="button"
+          className="w-full flex items-center justify-between text-left"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+        >
+          <div>
+            <h3 className="font-semibold">詳細情報（任意）</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              営業時間・専門分野・実績・設備・アクセスを登録するとSEO定文の品質が向上します
+            </p>
+          </div>
+          {showAdvanced ? (
+            <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+          )}
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            {/* 営業時間 */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>営業時間</Label>
+              <Input
+                placeholder="例：平日 9:00～18:00、土日 9:00～13:00、日祀休診"
+                value={profile.businessHours || ""}
+                onChange={(e) => handleChange("businessHours", e.target.value)}
+              />
+            </div>
+
+            {/* 専門分野 */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>専門分野</Label>
+              <Input
+                placeholder="例：歯周病治療、インプラント、小児歯科"
+                value={profile.specialties || ""}
+                onChange={(e) => handleChange("specialties", e.target.value)}
+              />
+            </div>
+
+            {/* 実績（資格・経験） */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>実績（資格・経験）</Label>
+              <Textarea
+                placeholder="例：歯科医免許 30年、日本歯科学会認定医、小児歯科専門医"
+                value={profile.achievements || ""}
+                onChange={(e) => handleChange("achievements", e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            {/* 設備 */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>設備</Label>
+              <Textarea
+                placeholder="例：デジタルX線、CTスキャン、レーザー治療器"
+                value={profile.facilities || ""}
+                onChange={(e) => handleChange("facilities", e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            {/* アクセス */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>アクセス</Label>
+              <Input
+                placeholder="例：東京メトロ渋谷駅徒歩５分、駐車場あり"
+                value={profile.access || ""}
+                onChange={(e) => handleChange("access", e.target.value)}
+              />
+            </div>
+
+            {/* 事例 */}
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>事例</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => {
+                    const cases = [...(profile.caseStudies || []), ""];
+                    onUpdate({ ...profile, caseStudies: cases });
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                  追加
+                </Button>
+              </div>
+              {(profile.caseStudies || []).length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  「追加」ボタンで事例を登録できます（例：インプラントの流れ、コスト範囲、実績数など）
+                </p>
+              )}
+              <div className="space-y-2">
+                {(profile.caseStudies || []).map((c, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Textarea
+                      placeholder={`事例 ${idx + 1}：例：50代女性、インプラント治療・満足度高い`}
+                      value={c}
+                      onChange={(e) => {
+                        const cases = [...(profile.caseStudies || [])];
+                        cases[idx] = e.target.value;
+                        onUpdate({ ...profile, caseStudies: cases });
+                      }}
+                      rows={2}
+                      className="flex-1 resize-none"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive mt-1"
+                      onClick={() => {
+                        const cases = (profile.caseStudies || []).filter((_, i) => i !== idx);
+                        onUpdate({ ...profile, caseStudies: cases });
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

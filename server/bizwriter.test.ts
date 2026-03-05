@@ -208,13 +208,14 @@ describe("BizWriter Types & Constants", () => {
   });
 
   it("should have correct tone options", () => {
+    expect(TONES).toContain("推奨");
     expect(TONES).toContain("丁寧");
     expect(TONES).toContain("カジュアル");
     expect(TONES).toContain("やさしい");
     expect(TONES).toContain("専門的");
     expect(TONES).toContain("親しみやすい");
     expect(TONES).toContain("堅め");
-    expect(TONES.length).toBe(6);
+    expect(TONES.length).toBe(7); // 推奨を含む
   });
 
   it("should have correct output format options", () => {

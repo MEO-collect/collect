@@ -86,6 +86,8 @@ export const generatedContents = mysqlTable("generated_contents", {
   storeProfileHash: varchar("storeProfileHash", { length: 64 }).notNull(),
   /** Output format (Instagram投稿文, 公式LINE配信文, etc.) */
   format: varchar("format", { length: 100 }).notNull(),
+  /** Topic/theme used for generation */
+  topic: varchar("topic", { length: 500 }),
   /** Generated text content */
   generatedText: text("generatedText").notNull(),
   /** Character count */

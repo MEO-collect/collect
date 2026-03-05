@@ -78,6 +78,13 @@ ${formatSpecific}
 - ハードリミット: 絶対に${hardLimit}文字を超えないこと`;
 }
 
+const FORMAT_RECOMMENDED_TONES_SERVER: Record<string, string> = {
+  "Instagram投稿文": "親しみやすい",
+  "公式LINE配信文": "やさしい",
+  "SEOブログ記事": "丁寧",
+  "GBP最新情報": "丁寧",
+};
+
 function buildSystemPrompt(
   profile: StoreProfile,
   formats: OutputFormat[],
@@ -111,6 +118,13 @@ ${t.closing ? `締め: 「${t.closing}」` : ""}`;
     }
   }
 
+  // 「推奨」トーンの場合、各媒体に合わせたトーンを指定
+  const resolvedTone = tone === "推奨"
+    ? formats.length === 1
+      ? FORMAT_RECOMMENDED_TONES_SERVER[formats[0]] || "丁寧"
+      : "媒体に合わせた最適なトーン"
+    : tone;
+
   const siteInfoRestriction = useOnlySiteInfo
     ? `\n【重要制約】提供されたURLの情報のみを使用してください。外部知識やハルシネーション（事実でない情報の生成）を絶対に含めないでください。URLから取得できない情報については「情報なし」と明記してください。`
     : "";
@@ -136,8 +150,14 @@ ${t.closing ? `締め: 「${t.closing}」` : ""}`;
 - ターゲット層: ${profile.targetAudience || "未設定"}
 - キーワード: ${profile.keywords || "なし"}
 - NGワード: ${profile.ngWords || "なし"}
+${profile.businessHours ? `- 営業時間: ${profile.businessHours}` : ""}
+${profile.specialties ? `- 専門分野: ${profile.specialties}` : ""}
+${profile.achievements ? `- 実績・資格: ${profile.achievements}` : ""}
+${profile.facilities ? `- 設備: ${profile.facilities}` : ""}
+${profile.access ? `- アクセス: ${profile.access}` : ""}
+${profile.caseStudies && profile.caseStudies.length > 0 ? `- 事例:\n${profile.caseStudies.map((c, i) => `  ${i + 1}. ${c}`).join("\n")}` : ""}
 
-【トーン】${tone}
+【トーン】${resolvedTone}
 
 ${complianceRules}
 
@@ -444,6 +464,12 @@ export const bizwriterRouter = router({
           keywords: z.string(),
           ngWords: z.string(),
           preferredTone: z.string(),
+          businessHours: z.string().optional(),
+          specialties: z.string().optional(),
+          achievements: z.string().optional(),
+          facilities: z.string().optional(),
+          access: z.string().optional(),
+          caseStudies: z.array(z.string()).optional(),
         }),
         topic: z.string().min(1, "お題を入力してください"),
         formats: z.array(z.string()).min(1, "出力形式を1つ以上選択してください"),
@@ -498,8 +524,8 @@ export const bizwriterRouter = router({
         input.avoidRepetition
       );
 
-      // 生成成功時にDBに保存
-      if (input.avoidRepetition && results.length > 0) {
+      // 生成成功時にDBに保存（avoidRepetitionに関わらず常に保存）
+      {
         const crypto = await import("crypto");
         const storeProfileHash = crypto
           .createHash("sha256")
@@ -512,6 +538,7 @@ export const bizwriterRouter = router({
             userId: ctx.user.id,
             storeProfileHash,
             format: result.format,
+            topic: input.topic,
             generatedText: result.content,
             charCount: result.content.length,
           });
@@ -519,5 +546,106 @@ export const bizwriterRouter = router({
       }
 
       return { results };
+    }),
+
+  // 類似投稿チェック
+  checkSimilar: subscribedProcedure
+    .input(
+      z.object({
+        topic: z.string().min(1),
+        profile: z.object({
+          storeName: z.string(),
+          address: z.string(),
+          industry: z.string(),
+          websiteUrl: z.string(),
+          referenceUrl: z.string(),
+          services: z.string(),
+          targetAudience: z.string(),
+          keywords: z.string(),
+          ngWords: z.string(),
+          preferredTone: z.string(),
+          businessHours: z.string().optional(),
+          specialties: z.string().optional(),
+          achievements: z.string().optional(),
+          facilities: z.string().optional(),
+          access: z.string().optional(),
+          caseStudies: z.array(z.string()).optional(),
+        }),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const crypto = await import("crypto");
+      const storeProfileHash = crypto
+        .createHash("sha256")
+        .update(JSON.stringify(input.profile))
+        .digest("hex");
+
+      const { getRecentGeneratedContentsByUser } = await import("../db");
+      const recentContents = await getRecentGeneratedContentsByUser(
+        ctx.user.id,
+        storeProfileHash,
+        30
+      );
+
+      if (recentContents.length === 0) {
+        return { similar: [] };
+      }
+
+      // LLMで類似度チェック
+      const contentSummaries = recentContents
+        .slice(0, 20)
+        .map((c, i) => `[${i + 1}] ${c.topic ? `お題:「${c.topic}」` : ""} 形式:${c.format} 日時:${new Date(c.createdAt).toLocaleDateString("ja-JP")}\n本文冒頭: ${c.generatedText.slice(0, 100)}...`)
+        .join("\n\n");
+
+      const result = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `あなたは投稿コンテンツの類似度チェックアシスタントです。新しいお題と過去の投稿を比較し、類似しているものを特定してください。`,
+          },
+          {
+            role: "user",
+            content: `新しいお題: 「${input.topic}」\n\n過去の投稿一覧:\n${contentSummaries}\n\n上記の過去の投稿の中から、新しいお題と類似しているもの（同じテーマ、季節、キャンペーン等）のインデックス番号をJSON配列で返してください。類似がなければ空配列を返してください。\n形式: {"similar_indices": [1, 3, 5]}`,
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "similar_check",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                similar_indices: {
+                  type: "array",
+                  items: { type: "integer" },
+                  description: "類似している投稿のインデックス番号（1始まり）",
+                },
+              },
+              required: ["similar_indices"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const content = result.choices[0]?.message?.content;
+      const textContent = typeof content === "string" ? content : "{}";
+      const parsed = JSON.parse(textContent) as { similar_indices: number[] };
+
+      const similarItems = (parsed.similar_indices || [])
+        .filter((idx) => idx >= 1 && idx <= recentContents.length)
+        .map((idx) => {
+          const item = recentContents[idx - 1];
+          return {
+            id: item.id,
+            topic: item.topic || "",
+            format: item.format,
+            contentPreview: item.generatedText.slice(0, 150),
+            createdAt: item.createdAt.getTime(),
+          };
+        });
+
+      return { similar: similarItems };
     }),
 });

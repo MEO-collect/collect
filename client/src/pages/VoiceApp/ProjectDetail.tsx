@@ -37,9 +37,12 @@ import {
   Square,
   Users,
   Coins,
-  AlertTriangle
+  AlertTriangle,
+  Camera,
+  FileDown
 } from "lucide-react";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { downloadAsPng, downloadAsPdf } from "@/lib/exportDocument";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -177,6 +180,32 @@ export default function ProjectDetail() {
   } | null>(null);
   const [errorUserComment, setErrorUserComment] = useState("");
   const reportMutation = trpc.report.submit.useMutation();
+  const minutesRef = useRef<HTMLDivElement>(null);
+  const karteRef = useRef<HTMLDivElement>(null);
+
+  const handleExportMinutes = useCallback(async (type: "png" | "pdf") => {
+    if (!minutesRef.current) return;
+    const name = `${project?.name || "議事録"}_議事録`;
+    try {
+      if (type === "png") await downloadAsPng(minutesRef.current, name);
+      else await downloadAsPdf(minutesRef.current, name);
+      toast.success(`議事録を${type.toUpperCase()}で保存しました`);
+    } catch {
+      toast.error("保存に失敗しました");
+    }
+  }, [project?.name]);
+
+  const handleExportKarte = useCallback(async (type: "png" | "pdf") => {
+    if (!karteRef.current) return;
+    const name = `${project?.name || "カルテ"}_カルテ`;
+    try {
+      if (type === "png") await downloadAsPng(karteRef.current, name);
+      else await downloadAsPdf(karteRef.current, name);
+      toast.success(`カルテを${type.toUpperCase()}で保存しました`);
+    } catch {
+      toast.error("保存に失敗しました");
+    }
+  }, [project?.name]);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const {
@@ -930,10 +959,10 @@ export default function ProjectDetail() {
                   </>
                 ) : (
                   <div className="space-y-4">
-                    <div className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                    <div ref={minutesRef} className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
                       <Streamdown>{project.minutes}</Streamdown>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -951,6 +980,24 @@ export default function ProjectDetail() {
                       >
                         <Download className="h-4 w-4 mr-2" />
                         Word
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExportMinutes("png")}
+                        className="glass-button rounded-xl"
+                      >
+                        <Camera className="h-4 w-4 mr-2" />
+                        PNG
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExportMinutes("pdf")}
+                        className="glass-button rounded-xl"
+                      >
+                        <FileDown className="h-4 w-4 mr-2" />
+                        PDF
                       </Button>
                       <Button
                         variant="ghost"
@@ -1032,10 +1079,10 @@ export default function ProjectDetail() {
                   </>
                 ) : (
                   <div className="space-y-4">
-                    <div className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                    <div ref={karteRef} className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
                       <Streamdown>{project.karte}</Streamdown>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -1053,6 +1100,24 @@ export default function ProjectDetail() {
                       >
                         <Download className="h-4 w-4 mr-2" />
                         Word
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExportKarte("png")}
+                        className="glass-button rounded-xl"
+                      >
+                        <Camera className="h-4 w-4 mr-2" />
+                        PNG
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExportKarte("pdf")}
+                        className="glass-button rounded-xl"
+                      >
+                        <FileDown className="h-4 w-4 mr-2" />
+                        PDF
                       </Button>
                       <Button
                         variant="ghost"

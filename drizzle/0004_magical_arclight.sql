@@ -1,0 +1,1 @@
+ALTER TABLE `generated_contents` ADD `topic` varchar(500);

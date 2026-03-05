@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Sparkles, AlertTriangle } from "lucide-react";
+import { Loader2, Sparkles, AlertTriangle, Search, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import type {
@@ -21,6 +21,7 @@ import {
   TONES,
   FORMAT_CHAR_LIMITS,
   TARGET_LENGTH_OPTIONS,
+  FORMAT_RECOMMENDED_TONES,
 } from "@shared/bizwriter-types";
 
 interface GeneratorScreenProps {
@@ -58,14 +59,19 @@ export default function GeneratorScreen({
   const [selectedFormats, setSelectedFormats] = useState<OutputFormat[]>([
     "Instagram投稿文",
   ]);
-  const [tone, setTone] = useState<Tone>(profile.preferredTone || "丁寧");
+  const [tone, setTone] = useState<Tone>(profile.preferredTone || "推奨");
   const [targetLength, setTargetLength] = useState<TargetLengthOption>("推奨");
   const [customLength, setCustomLength] = useState<number>(500);
   const [useTemplates, setUseTemplates] = useState(false);
-  const [avoidRepetition, setAvoidRepetition] = useState(false);
+  const [avoidRepetition, setAvoidRepetition] = useState(true); // 初期値オン
   const [useOnlySiteInfo, setUseOnlySiteInfo] = useState(false);
+  const [similarPosts, setSimilarPosts] = useState<Array<{id: number; topic: string; format: string; contentPreview: string; createdAt: number}>>([]);
+  const [showSimilar, setShowSimilar] = useState(false);
+  const [isCheckingSimilar, setIsCheckingSimilar] = useState(false);
+  const similarCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const generateMutation = trpc.bizwriter.generate.useMutation();
+  const checkSimilarMutation = trpc.bizwriter.checkSimilar.useMutation();
 
   const hasUrls = !!(profile.websiteUrl || profile.referenceUrl);
 
@@ -87,6 +93,45 @@ export default function GeneratorScreen({
           `${f}の上限は${FORMAT_CHAR_LIMITS[f]}文字ですが、${customLength}文字が指定されています`
       );
   }, [targetLength, customLength, selectedFormats]);
+
+  // 類似投稿チェック（お題入力後に自動実行）
+  useEffect(() => {
+    if (!topic.trim() || topic.trim().length < 5) {
+      setSimilarPosts([]);
+      return;
+    }
+    if (similarCheckTimer.current) clearTimeout(similarCheckTimer.current);
+    similarCheckTimer.current = setTimeout(async () => {
+      setIsCheckingSimilar(true);
+      try {
+        const result = await checkSimilarMutation.mutateAsync({
+          topic: topic.trim(),
+          profile: {
+            storeName: profile.storeName,
+            address: profile.address,
+            industry: profile.industry,
+            websiteUrl: profile.websiteUrl,
+            referenceUrl: profile.referenceUrl,
+            services: profile.services,
+            targetAudience: profile.targetAudience,
+            keywords: profile.keywords,
+            ngWords: profile.ngWords,
+            preferredTone: profile.preferredTone,
+          },
+        });
+        setSimilarPosts(result.similar);
+        if (result.similar.length > 0) setShowSimilar(true);
+      } catch {
+        // サイレントに失敗を無視
+      } finally {
+        setIsCheckingSimilar(false);
+      }
+    }, 1500); // 1.5秒待機
+    return () => {
+      if (similarCheckTimer.current) clearTimeout(similarCheckTimer.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topic]);
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -143,13 +188,67 @@ export default function GeneratorScreen({
       {/* お題入力 */}
       <div className="glass-card p-5 space-y-3">
         <Label className="text-base font-semibold">今回のお題</Label>
-        <Textarea
-          placeholder="例：春の花粉症対策キャンペーンについて投稿したい"
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          rows={3}
-          className="resize-none"
-        />
+        <div className="relative">
+          <Textarea
+            placeholder="例：春の花粉症対策キャンペーンについて投稿したい"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            rows={3}
+            className="resize-none"
+          />
+          {isCheckingSimilar && (
+            <div className="absolute right-2 bottom-2 flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>類似投稿を確認中...</span>
+            </div>
+          )}
+        </div>
+
+        {/* 類似投稿の警告 */}
+        {similarPosts.length > 0 && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 overflow-hidden">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between p-3 text-left"
+              onClick={() => setShowSimilar(!showSimilar)}
+            >
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  類似した過去の投稿が {similarPosts.length} 件あります
+                </span>
+              </div>
+              {showSimilar ? (
+                <ChevronUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              )}
+            </button>
+            {showSimilar && (
+              <div className="border-t border-amber-200 dark:border-amber-800 divide-y divide-amber-100 dark:divide-amber-900">
+                {similarPosts.map((post) => (
+                  <div key={post.id} className="p-3 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
+                        {post.format}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {new Date(post.createdAt).toLocaleDateString("ja-JP")}
+                      </span>
+                    </div>
+                    {post.topic && (
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                        お題: {post.topic}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground line-clamp-2">{post.contentPreview}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 出力形式 */}
@@ -197,10 +296,20 @@ export default function GeneratorScreen({
                       : "border-border/50 text-muted-foreground hover:border-border"
                   }`}
                 >
-                  {t}
+                  {t === "推奨" ? (
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" />
+                      推奨
+                    </span>
+                  ) : t}
                 </button>
               ))}
             </div>
+            {tone === "推奨" && selectedFormats.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                推奨トーン: {selectedFormats.map(f => `${f}→${FORMAT_RECOMMENDED_TONES[f] || "丁寧"}`).join("、")}
+              </p>
+            )}
           </div>
 
           {/* 文字数の目安 */}

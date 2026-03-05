@@ -223,6 +223,26 @@ export async function getRecentGeneratedContents(
     .limit(limit);
 }
 
+export async function getRecentGeneratedContentsByUser(
+  userId: number,
+  storeProfileHash: string,
+  limit: number = 20
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(generatedContents)
+    .where(
+      and(
+        eq(generatedContents.userId, userId),
+        eq(generatedContents.storeProfileHash, storeProfileHash)
+      )
+    )
+    .orderBy(desc(generatedContents.createdAt))
+    .limit(limit);
+}
+
 // ============ Error Reports Helpers ============
 
 export async function createErrorReport(report: InsertErrorReport): Promise<void> {

@@ -12,12 +12,13 @@ const analyzeSchema = z.object({
       type: z.string(),
       base64: z.string(),
     })
-  ).min(1, "ファイルを1つ以上アップロードしてください"),
+  ).default([]),
   profile: z.object({
     industry: z.string(),
     address: z.string(),
     url: z.string(),
   }),
+  companyUrl: z.string().url().optional(),
 });
 
 // ============ 診断エンドポイント ============
@@ -42,7 +43,42 @@ export const shozaiRouter = router({
   analyze: subscribedProcedure
     .input(analyzeSchema)
     .mutation(async ({ input }) => {
-      const { files, profile } = input;
+      const { files, profile, companyUrl } = input;
+
+      // URLモードの場合はWebページからコンテンツを取得
+      let urlContent = "";
+      if (companyUrl) {
+        try {
+          const response = await fetch(companyUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (compatible; ShozaiDoctor/1.0)",
+              "Accept": "text/html,application/xhtml+xml",
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+          const html = await response.text();
+          // HTMLタグを除去してテキストを抽出
+          const text = html
+            .replace(/<script[\s\S]*?<\/script>/gi, "")
+            .replace(/<style[\s\S]*?<\/style>/gi, "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&nbsp;/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 8000); // 最大8000文字
+          urlContent = text;
+        } catch (err) {
+          console.error("[ShozaiDoctor] URL fetch error:", err);
+          throw new Error(`URLのコンテンツを取得できませんでした: ${companyUrl}`);
+        }
+      }
+
+      if (!companyUrl && files.length === 0) {
+        throw new Error("ファイルをアップロードするか、URLを入力してください");
+      }
 
       // Build multimodal content for LLM
       const contentParts: Array<
@@ -50,14 +86,21 @@ export const shozaiRouter = router({
         | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } }
       > = [];
 
+      const sourceDescription = companyUrl
+        ? `会社ホームページ（${companyUrl}）のコンテンツ`
+        : "アップロードされた資料（営業資料・見積書・提案書等）";
+
       contentParts.push({
         type: "text",
-        text: `あなたは商材分析の専門家です。以下のアップロードされた資料（営業資料・見積書・提案書等）を詳細に分析し、構造化データとして抽出してください。
+        text: `あなたは商材分析の専門家です。以下の${sourceDescription}を詳細に分析し、構造化データとして抽出してください。
 
 ユーザー情報:
 - 業種: ${profile.industry}
 - 住所: ${profile.address || "未入力"}
 - URL: ${profile.url || "未入力"}
+${urlContent ? `
+【ホームページコンテンツ】
+${urlContent}` : ""}
 
 以下の項目を日本語で詳しく抽出してください:
 1. サービス概要: 提案されているサービスや商品の概要
