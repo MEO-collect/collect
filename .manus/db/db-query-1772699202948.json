@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, format, topic, createdAt FROM generated_contents ORDER BY createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT id, format, topic, createdAt FROM generated_contents ORDER BY createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "format": "SEOブログ記事",
+      "topic": "NULL",
+      "createdAt": "2026-03-05 01:50:01"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tformat\ttopic\tcreatedAt\n1\tSEOブログ記事\tNULL\t2026-03-05 01:50:01\n",
+  "stderr": "",
+  "execution_time_ms": 1538
+}

@@ -584,17 +584,41 @@ export const bizwriterRouter = router({
         return { similar: [] };
       }
 
-      // LLMで類似度チェック
+      // まず完全一致・部分一致をtopicで直接チェック（LLM不要の高速チェック）
+      const newTopicLower = input.topic.toLowerCase().trim();
+      const directMatches = recentContents
+        .map((c, i) => ({ c, i }))
+        .filter(({ c }) => {
+          if (!c.topic) return false;
+          const existingTopic = c.topic.toLowerCase().trim();
+          return existingTopic === newTopicLower ||
+            existingTopic.includes(newTopicLower) ||
+            newTopicLower.includes(existingTopic);
+        });
+
+      if (directMatches.length > 0) {
+        // 直接一致が見つかった場合はLLMを使わず即返す
+        const similarItems = directMatches.map(({ c }) => ({
+          id: c.id,
+          topic: c.topic || "",
+          format: c.format,
+          contentPreview: c.generatedText.slice(0, 150),
+          createdAt: c.createdAt.getTime(),
+        }));
+        return { similar: similarItems };
+      }
+
+      // LLMで類似度チェック（topicがNULLの場合も本文で判定）
       const contentSummaries = recentContents
         .slice(0, 20)
-        .map((c, i) => `[${i + 1}] ${c.topic ? `お題:「${c.topic}」` : ""} 形式:${c.format} 日時:${new Date(c.createdAt).toLocaleDateString("ja-JP")}\n本文冒頭: ${c.generatedText.slice(0, 100)}...`)
+        .map((c, i) => `[${i + 1}] ${c.topic ? `お題:「${c.topic}」` : `（お題なし）`} 形式:${c.format} 日時:${new Date(c.createdAt).toLocaleDateString("ja-JP")}\n本文冒頭: ${c.generatedText.slice(0, 150)}...`)
         .join("\n\n");
 
       const result = await invokeLLM({
         messages: [
           {
             role: "system",
-            content: `あなたは投稿コンテンツの類似度チェックアシスタントです。新しいお題と過去の投稿を比較し、類似しているものを特定してください。`,
+            content: `あなたは投稿コンテンツの類似度チェックアシスタントです。新しいお題と過去の投稿を比較し、類似しているものを特定してください。お題がない場合は本文冒頭の内容で判断してください。同じテーマ・季節・キャンペーン・商品・サービスについて書かれている投稿を類似と判定してください。`,
           },
           {
             role: "user",

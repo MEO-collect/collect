@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, format, topic, LEFT(generated_text, 30) as preview, created_at FROM generated_contents ORDER BY created_at DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2LaWadDEvwzJBKf.root --database 2yeo54CKUnZhz2uBtEnQQ8 --execute SELECT id, format, topic, LEFT(generated_text, 30) as preview, created_at FROM generated_contents ORDER BY created_at DESC LIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'generated_text' in 'field list'"
+  ]
+}
