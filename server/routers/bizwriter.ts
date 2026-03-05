@@ -574,16 +574,9 @@ export const bizwriterRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const crypto = await import("crypto");
-      const storeProfileHash = crypto
-        .createHash("sha256")
-        .update(JSON.stringify(input.profile))
-        .digest("hex");
-
-      const { getRecentGeneratedContentsByUser } = await import("../db");
-      const recentContents = await getRecentGeneratedContentsByUser(
+      const { getAllGeneratedContentsByUser } = await import("../db");
+      const recentContents = await getAllGeneratedContentsByUser(
         ctx.user.id,
-        storeProfileHash,
         30
       );
 

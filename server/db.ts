@@ -243,6 +243,20 @@ export async function getRecentGeneratedContentsByUser(
     .limit(limit);
 }
 
+export async function getAllGeneratedContentsByUser(
+  userId: number,
+  limit: number = 30
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(generatedContents)
+    .where(eq(generatedContents.userId, userId))
+    .orderBy(desc(generatedContents.createdAt))
+    .limit(limit);
+}
+
 // ============ Error Reports Helpers ============
 
 export async function createErrorReport(report: InsertErrorReport): Promise<void> {
