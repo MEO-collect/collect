@@ -207,10 +207,12 @@ export default function GeneratorScreen({
         {/* 類似投稿の警告 */}
         {similarPosts.length > 0 && (
           <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between p-3 text-left"
+            <div
+              role="button"
+              tabIndex={0}
+              className="w-full flex items-center justify-between p-3 text-left cursor-pointer select-none"
               onClick={() => setShowSimilar(!showSimilar)}
+              onKeyDown={(e) => e.key === 'Enter' && setShowSimilar(v => !v)}
             >
               <div className="flex items-center gap-2">
                 <Search className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -223,7 +225,7 @@ export default function GeneratorScreen({
               ) : (
                 <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               )}
-            </button>
+            </div>
             {showSimilar && (
               <div className="border-t border-amber-200 dark:border-amber-800 divide-y divide-amber-100 dark:divide-amber-900">
                 {similarPosts.map((post) => (
