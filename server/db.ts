@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, memberProfiles, subscriptions, InsertMemberProfile, InsertSubscription, generatedContents, InsertGeneratedContent } from "../drizzle/schema";
+import { InsertUser, users, memberProfiles, subscriptions, InsertMemberProfile, InsertSubscription, generatedContents, InsertGeneratedContent, errorReports, InsertErrorReport } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -220,5 +220,31 @@ export async function getRecentGeneratedContents(
       )
     )
     .orderBy(desc(generatedContents.createdAt))
+    .limit(limit);
+}
+
+// ============ Error Reports Helpers ============
+
+export async function createErrorReport(report: InsertErrorReport): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save error report: database not available");
+    return;
+  }
+  await db.insert(errorReports).values(report);
+}
+
+export async function getErrorReports(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      report: errorReports,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(errorReports)
+    .leftJoin(users, eq(errorReports.userId, users.id))
+    .orderBy(desc(errorReports.createdAt))
     .limit(limit);
 }

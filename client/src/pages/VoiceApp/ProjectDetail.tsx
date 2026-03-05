@@ -36,7 +36,8 @@ import {
   RefreshCw,
   Square,
   Users,
-  Coins
+  Coins,
+  AlertTriangle
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
@@ -168,6 +169,15 @@ export default function ProjectDetail() {
     gender: "",
   });
 
+  // エラー報告用 state
+  const [errorReportInfo, setErrorReportInfo] = useState<{
+    operation: string;
+    errorMessage: string;
+    context?: string;
+  } | null>(null);
+  const [errorUserComment, setErrorUserComment] = useState("");
+  const reportMutation = trpc.report.submit.useMutation();
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const {
     isRecording,
@@ -235,6 +245,30 @@ export default function ProjectDetail() {
     };
   }, [savedAudioUrl]);
 
+  // エラー報告ダイアログを開く
+  const openErrorReport = (operation: string, errorMessage: string, context?: string) => {
+    setErrorReportInfo({ operation, errorMessage, context });
+    setErrorUserComment("");
+  };
+
+  // エラー報告を送信
+  const handleSubmitErrorReport = async () => {
+    if (!errorReportInfo) return;
+    try {
+      await reportMutation.mutateAsync({
+        appName: "voice",
+        operation: errorReportInfo.operation,
+        errorMessage: errorReportInfo.errorMessage,
+        context: errorReportInfo.context,
+        userComment: errorUserComment || undefined,
+      });
+      toast.success("エラーを報告しました。ご協力ありがとうございます。");
+      setErrorReportInfo(null);
+    } catch {
+      toast.error("報告の送信に失敗しました");
+    }
+  };
+
   const handleTranscribe = async () => {
     if (!audioBlob && !savedAudioUrl) {
       toast.error("録音データがありません");
@@ -281,7 +315,24 @@ export default function ProjectDetail() {
       toast.success("書き起こしが完了しました");
     } catch (error) {
       console.error("Transcription error:", error);
-      toast.error("書き起こしに失敗しました");
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const ctx = JSON.stringify({
+        duration: project?.recordingDuration,
+        speakerCount,
+        mimeType: audioBlob?.type || "unknown",
+        userAgent: navigator.userAgent,
+      });
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <span>書き起こしに失敗しました</span>
+          <button
+            className="text-xs underline text-left text-destructive-foreground/80"
+            onClick={() => openErrorReport("transcribe", errMsg, ctx)}
+          >
+            ▶ 報告する
+          </button>
+        </div>
+      );
     }
   };
 
@@ -308,7 +359,22 @@ export default function ProjectDetail() {
       toast.success("要約が完了しました");
     } catch (error) {
       console.error("Summary error:", error);
-      toast.error("要約に失敗しました");
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const ctx = JSON.stringify({
+        transcriptionLength: project?.transcription?.length,
+        userAgent: navigator.userAgent,
+      });
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <span>要約に失敗しました</span>
+          <button
+            className="text-xs underline text-left text-destructive-foreground/80"
+            onClick={() => openErrorReport("summarize", errMsg, ctx)}
+          >
+            ▶ 報告する
+          </button>
+        </div>
+      );
     }
   };
 
@@ -336,7 +402,23 @@ export default function ProjectDetail() {
       toast.success("議事録が生成されました");
     } catch (error) {
       console.error("Minutes error:", error);
-      toast.error("議事録の生成に失敗しました");
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const ctx = JSON.stringify({
+        transcriptionLength: project?.transcription?.length,
+        template: minutesTemplate,
+        userAgent: navigator.userAgent,
+      });
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <span>議事録の生成に失敗しました</span>
+          <button
+            className="text-xs underline text-left text-destructive-foreground/80"
+            onClick={() => openErrorReport("generateMinutes", errMsg, ctx)}
+          >
+            ▶ 報告する
+          </button>
+        </div>
+      );
     }
   };
 
@@ -363,7 +445,23 @@ export default function ProjectDetail() {
       toast.success("カルテが生成されました");
     } catch (error) {
       console.error("Karte error:", error);
-      toast.error("カルテの生成に失敗しました");
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const ctx = JSON.stringify({
+        transcriptionLength: project?.transcription?.length,
+        patientInfo: kartePatientInfo,
+        userAgent: navigator.userAgent,
+      });
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <span>カルテの生成に失敗しました</span>
+          <button
+            className="text-xs underline text-left text-destructive-foreground/80"
+            onClick={() => openErrorReport("generateKarte", errMsg, ctx)}
+          >
+            ▶ 報告する
+          </button>
+        </div>
+      );
     }
   };
 
@@ -976,6 +1074,56 @@ export default function ProjectDetail() {
           </div>
         )}
       </main>
+
+      {/* エラー報告ダイアログ */}
+      <Dialog open={!!errorReportInfo} onOpenChange={(open) => { if (!open) setErrorReportInfo(null); }}>
+        <DialogContent className="glass-card border-0">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              エラーを報告する
+            </DialogTitle>
+            <DialogDescription>
+              エラーの内容を開発チームに送信します。状況をご記入いただけると改善に役立ちます。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-xl bg-destructive/10 text-sm text-destructive font-mono break-all">
+              {errorReportInfo?.errorMessage}
+            </div>
+            <div>
+              <Label className="text-sm font-medium">コメント（任意）</Label>
+              <Textarea
+                className="mt-2 glass-input rounded-xl"
+                placeholder="例: 15分の音声を書き起こしした際に発生しました"
+                value={errorUserComment}
+                onChange={(e) => setErrorUserComment(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setErrorReportInfo(null)}
+              className="glass-button rounded-xl"
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={handleSubmitErrorReport}
+              disabled={reportMutation.isPending}
+              className="btn-gradient text-white border-0 rounded-xl"
+            >
+              {reportMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />送信中...</>
+              ) : (
+                "報告する"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 話者名変更ダイアログ */}
       <Dialog open={showSpeakerRenameDialog} onOpenChange={setShowSpeakerRenameDialog}>

@@ -95,3 +95,29 @@ export const generatedContents = mysqlTable("generated_contents", {
 
 export type GeneratedContent = typeof generatedContents.$inferSelect;
 export type InsertGeneratedContent = typeof generatedContents.$inferInsert;
+
+/**
+ * Error reports table
+ * Stores user-submitted error reports from the app
+ */
+export const errorReports = mysqlTable("error_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  /** User ID (nullable for unauthenticated errors) */
+  userId: int("userId"),
+  /** App name where the error occurred (e.g. "voice", "bizwriter", "image") */
+  appName: varchar("appName", { length: 100 }).notNull(),
+  /** Operation that failed (e.g. "transcribe", "summarize") */
+  operation: varchar("operation", { length: 100 }).notNull(),
+  /** Error message from the exception */
+  errorMessage: text("errorMessage").notNull(),
+  /** Additional context (JSON string: file size, duration, speaker count, etc.) */
+  context: text("context"),
+  /** Optional comment from the user */
+  userComment: text("userComment"),
+  /** Browser user agent */
+  userAgent: text("userAgent"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ErrorReport = typeof errorReports.$inferSelect;
+export type InsertErrorReport = typeof errorReports.$inferInsert;

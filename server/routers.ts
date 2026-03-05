@@ -3,7 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { getMemberProfile, upsertMemberProfile, getSubscription, createSubscription, updateSubscription, deleteSubscription, getAllSubscriptionsWithUsers } from "./db";
+import { getMemberProfile, upsertMemberProfile, getSubscription, createSubscription, updateSubscription, deleteSubscription, getAllSubscriptionsWithUsers, createErrorReport, getErrorReports } from "./db";
 import { getStripe } from "./stripe/client";
 import { SUBSCRIPTION_PLAN, calculateCancellationFee, isInInitialPeriod } from "./stripe/products";
 import { extractSubData, subDataToDbFields } from "./stripe/helpers";
@@ -560,6 +560,51 @@ export const appRouter = router({
 
   // 商材ドクター router
   shozai: shozaiRouter,
+
+  // エラー報告 router
+  report: router({
+    // ユーザーからのエラー報告を受け付ける（protectedProcedure: ログイン必須）
+    submit: protectedProcedure
+      .input(z.object({
+        appName: z.string().min(1).max(100),
+        operation: z.string().min(1).max(100),
+        errorMessage: z.string().min(1),
+        context: z.string().optional(),
+        userComment: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await createErrorReport({
+          userId: ctx.user.id,
+          appName: input.appName,
+          operation: input.operation,
+          errorMessage: input.errorMessage,
+          context: input.context ?? null,
+          userComment: input.userComment ?? null,
+          userAgent: null, // フロントエンドから渡す場合はcontextに含める
+        });
+        console.log(`[ErrorReport] Saved error report from user ${ctx.user.id}: ${input.appName}/${input.operation}`);
+        return { success: true };
+      }),
+
+    // 管理者向け: エラー報告一覧取得
+    list: adminProcedure
+      .input(z.object({ limit: z.number().min(1).max(500).default(100) }))
+      .query(async ({ input }) => {
+        const reports = await getErrorReports(input.limit);
+        return reports.map(r => ({
+          id: r.report.id,
+          userId: r.report.userId,
+          userName: r.userName,
+          userEmail: r.userEmail,
+          appName: r.report.appName,
+          operation: r.report.operation,
+          errorMessage: r.report.errorMessage,
+          context: r.report.context,
+          userComment: r.report.userComment,
+          createdAt: r.report.createdAt,
+        }));
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

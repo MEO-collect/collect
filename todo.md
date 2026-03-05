@@ -259,3 +259,11 @@
 - [x] 現在の商材ドクタールーターを確認（日付の扱い方）
 - [x] LLMプロンプトに現在の日付・年を正確に渡す（JST日本時間で年月日を取得してプロンプトに追加）
 - [x] テスト確認（全205テスト合格）
+
+## エラー報告機能
+- [x] DBスキーマ: error_reportsテーブル追加（userId, appName, operation, errorMessage, context, userComment, userAgent, createdAt）
+- [x] DBマイグレーション実行（pnpm db:push）
+- [x] サーバーサイド: report.submit（ユーザー向け）・report.list（管理者向け）tRPCエンドポイント実装
+- [x] フロントエンド: 書き起こし・要約・議事録・カルテの全エラー箇所に「報告する」リンク追加
+- [x] フロントエンド: 報告ダイアログ（エラー内容・コメント入力・送信）
+- [x] テスト追加（4テスト）と動作確認（全209テスト合格）
