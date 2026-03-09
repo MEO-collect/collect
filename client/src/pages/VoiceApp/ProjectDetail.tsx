@@ -179,6 +179,7 @@ export default function ProjectDetail() {
     context?: string;
   } | null>(null);
   const [errorUserComment, setErrorUserComment] = useState("");
+  const [autoSaved, setAutoSaved] = useState(false);
   const reportMutation = trpc.report.submit.useMutation();
   const minutesRef = useRef<HTMLDivElement>(null);
   const karteRef = useRef<HTMLDivElement>(null);
@@ -274,13 +275,27 @@ export default function ProjectDetail() {
     };
   }, [savedAudioUrl]);
 
-  // エラー報告ダイアログを開く
-  const openErrorReport = (operation: string, errorMessage: string, context?: string) => {
+  // エラー報告: エラー発生時に自動でDB保存し、ダイアログはコメント追記用
+  const openErrorReport = async (operation: string, errorMessage: string, context?: string) => {
     setErrorReportInfo({ operation, errorMessage, context });
     setErrorUserComment("");
+    setAutoSaved(false);
+    // エラー発生時点で自動的にDBに保存
+    try {
+      await reportMutation.mutateAsync({
+        appName: "voice",
+        operation,
+        errorMessage,
+        context,
+        userComment: undefined,
+      });
+      setAutoSaved(true);
+    } catch {
+      // 自動保存失敗は無視（ユーザーが手動で報告できる）
+    }
   };
 
-  // エラー報告を送信
+  // エラー報告にコメントを追記して再送信
   const handleSubmitErrorReport = async () => {
     if (!errorReportInfo) return;
     try {
@@ -291,10 +306,10 @@ export default function ProjectDetail() {
         context: errorReportInfo.context,
         userComment: errorUserComment || undefined,
       });
-      toast.success("エラーを報告しました。ご協力ありがとうございます。");
+      toast.success("コメントを追記しました。ご協力ありがとうございます。");
       setErrorReportInfo(null);
     } catch {
-      toast.error("報告の送信に失敗しました");
+      toast.error("送信に失敗しました");
     }
   };
 
@@ -1146,10 +1161,17 @@ export default function ProjectDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              エラーを報告する
+              エラー報告
+              {autoSaved && (
+                <span className="ml-auto text-xs text-green-500 font-normal flex items-center gap-1">
+                  <Check className="h-3 w-3" />自動保存済み
+                </span>
+              )}
             </DialogTitle>
             <DialogDescription>
-              エラーの内容を開発チームに送信します。状況をご記入いただけると改善に役立ちます。
+              {autoSaved
+                ? "エラー情報は自動的に保存されました。追加のコメントがあれば入力して送信してください。"
+                : "エラーの内容を送信します。状況をご記入いただけると改善に役立ちます。"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
