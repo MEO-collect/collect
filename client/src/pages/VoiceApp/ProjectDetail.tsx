@@ -57,6 +57,12 @@ import { saveAudio, getAudio } from "@/lib/indexedDB";
 import { useAudioRecorder, formatDuration } from "@/hooks/useAudioRecorder";
 import { Streamdown } from "streamdown";
 
+// フロントエンドでチャンク数を推定（バックエンドと同じ8000文字単位）
+const CHUNK_SIZE = 8000;
+function estimateChunkCount(text: string): number {
+  return Math.max(1, Math.ceil(text.length / CHUNK_SIZE));
+}
+
 function getSpeakerColor(speakerName: string): string {
   const colors = [
     "speaker-color-1",
@@ -172,6 +178,9 @@ export default function ProjectDetail() {
     gender: "",
   });
 
+  // 進捗表示用 state
+  const [processingProgress, setProcessingProgress] = useState<string | null>(null);
+
   // エラー報告用 state
   const [errorReportInfo, setErrorReportInfo] = useState<{
     operation: string;
@@ -275,8 +284,8 @@ export default function ProjectDetail() {
     };
   }, [savedAudioUrl]);
 
-  // エラー報告: エラー発生時に自動でDB保存し、ダイアログはコメント追記用
-  const openErrorReport = async (operation: string, errorMessage: string, context?: string) => {
+  // エラー発生時に即座にDBに自動保存し、ダイアログを開く
+  const openErrorReport = useCallback(async (operation: string, errorMessage: string, context?: string) => {
     setErrorReportInfo({ operation, errorMessage, context });
     setErrorUserComment("");
     setAutoSaved(false);
@@ -293,7 +302,23 @@ export default function ProjectDetail() {
     } catch {
       // 自動保存失敗は無視（ユーザーが手動で報告できる）
     }
-  };
+  }, [reportMutation]);
+
+  // エラーをDBに自動保存（ダイアログを開かずにバックグラウンドで保存）
+  const autoSaveError = useCallback(async (operation: string, errorMessage: string, context?: string) => {
+    try {
+      await reportMutation.mutateAsync({
+        appName: "voice",
+        operation,
+        errorMessage,
+        context,
+        userComment: undefined,
+      });
+      console.log(`[ErrorReport] Auto-saved error: ${operation}`);
+    } catch (saveErr) {
+      console.error("[ErrorReport] Failed to auto-save error:", saveErr);
+    }
+  }, [reportMutation]);
 
   // エラー報告にコメントを追記して再送信
   const handleSubmitErrorReport = async () => {
@@ -320,12 +345,31 @@ export default function ProjectDetail() {
     }
 
     try {
+      setProcessingProgress("音声データを読み込み中...");
       let blob = audioBlob;
       if (!blob && savedAudioUrl) {
         const response = await fetch(savedAudioUrl);
         blob = await response.blob();
       }
       if (!blob) return;
+
+      // ファイルサイズを確認
+      const fileSizeMB = blob.size / (1024 * 1024);
+      if (fileSizeMB > 15) {
+        setProcessingProgress(null);
+        const errMsg = `音声ファイルが大きすぎます（${fileSizeMB.toFixed(1)}MB）。15MB以下の音声ファイルのみ対応しています。`;
+        toast.error(errMsg);
+        const ctx = JSON.stringify({
+          fileSizeMB: fileSizeMB.toFixed(1),
+          duration: project?.recordingDuration,
+          mimeType: blob.type,
+          userAgent: navigator.userAgent,
+        });
+        await autoSaveError("transcribe", errMsg, ctx);
+        return;
+      }
+
+      setProcessingProgress(`書き起こし中... (${fileSizeMB.toFixed(1)}MB)`);
 
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -337,11 +381,15 @@ export default function ProjectDetail() {
       reader.readAsDataURL(blob);
       const audioBase64 = await base64Promise;
 
+      setProcessingProgress("AIが音声を解析中... (数分かかる場合があります)");
+
       const result = await transcribeMutation.mutateAsync({
         audioBase64,
         mimeType: blob.type || "audio/webm",
         speakerCount: speakerCount === "auto" ? null : parseInt(speakerCount),
       });
+
+      setProcessingProgress(null);
 
       const updated = updateProject(projectId!, {
         transcription: result.transcription,
@@ -358,6 +406,7 @@ export default function ProjectDetail() {
       }
       toast.success("書き起こしが完了しました");
     } catch (error) {
+      setProcessingProgress(null);
       console.error("Transcription error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
       const ctx = JSON.stringify({
@@ -366,6 +415,8 @@ export default function ProjectDetail() {
         mimeType: audioBlob?.type || "unknown",
         userAgent: navigator.userAgent,
       });
+      // エラーを自動的にDBに保存
+      await autoSaveError("transcribe", errMsg, ctx);
       toast.error(
         <div className="flex flex-col gap-2">
           <span>書き起こしに失敗しました</span>
@@ -373,7 +424,7 @@ export default function ProjectDetail() {
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("transcribe", errMsg, ctx)}
           >
-            ▶ 報告する
+            ▶ 詳細を報告する（自動保存済み）
           </button>
         </div>
       );
@@ -387,27 +438,71 @@ export default function ProjectDetail() {
     }
 
     try {
-      const result = await summarizeMutation.mutateAsync({
-        transcription: project.transcription,
-      });
+      const chunkCount = estimateChunkCount(project.transcription);
+      if (chunkCount > 1) {
+        setProcessingProgress(`要約中... (チャンク1/${chunkCount}を処理中)`);
+        // 進捗を段階的に更新するタイマー
+        let currentChunk = 1;
+        const progressInterval = setInterval(() => {
+          if (currentChunk < chunkCount) {
+            currentChunk++;
+            setProcessingProgress(`要約中... (チャンク${currentChunk}/${chunkCount}を処理中)`);
+          } else {
+            setProcessingProgress(`要約中... (最終統合処理中)`);
+            clearInterval(progressInterval);
+          }
+        }, 25000); // 25秒ごとに進捗更新
 
-      const updated = updateProject(projectId!, {
-        summary: result.summary,
-        status: "summarized",
-        tokenUsage: {
-          ...project.tokenUsage,
-          summary: result.tokenUsage,
-        },
-      });
-      if (updated) setProject(updated);
-      toast.success("要約が完了しました");
+        try {
+          const result = await summarizeMutation.mutateAsync({
+            transcription: project.transcription,
+          });
+          clearInterval(progressInterval);
+          setProcessingProgress(null);
+
+          const updated = updateProject(projectId!, {
+            summary: result.summary,
+            status: "summarized",
+            tokenUsage: {
+              ...project.tokenUsage,
+              summary: result.tokenUsage,
+            },
+          });
+          if (updated) setProject(updated);
+          toast.success(`要約が完了しました（${result.chunkCount}チャンクを処理）`);
+        } catch (error) {
+          clearInterval(progressInterval);
+          throw error;
+        }
+      } else {
+        setProcessingProgress("要約中...");
+        const result = await summarizeMutation.mutateAsync({
+          transcription: project.transcription,
+        });
+        setProcessingProgress(null);
+
+        const updated = updateProject(projectId!, {
+          summary: result.summary,
+          status: "summarized",
+          tokenUsage: {
+            ...project.tokenUsage,
+            summary: result.tokenUsage,
+          },
+        });
+        if (updated) setProject(updated);
+        toast.success("要約が完了しました");
+      }
     } catch (error) {
+      setProcessingProgress(null);
       console.error("Summary error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
       const ctx = JSON.stringify({
         transcriptionLength: project?.transcription?.length,
+        estimatedChunks: estimateChunkCount(project?.transcription || ""),
         userAgent: navigator.userAgent,
       });
+      // エラーを自動的にDBに保存
+      await autoSaveError("summarize", errMsg, ctx);
       toast.error(
         <div className="flex flex-col gap-2">
           <span>要約に失敗しました</span>
@@ -415,7 +510,7 @@ export default function ProjectDetail() {
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("summarize", errMsg, ctx)}
           >
-            ▶ 報告する
+            ▶ 詳細を報告する（自動保存済み）
           </button>
         </div>
       );
@@ -429,29 +524,72 @@ export default function ProjectDetail() {
     }
 
     try {
-      const result = await minutesMutation.mutateAsync({
-        transcription: project.transcription,
-        template: minutesTemplate,
-        metadata: minutesMetadata,
-      });
+      const chunkCount = estimateChunkCount(project.transcription);
+      if (chunkCount > 1) {
+        setProcessingProgress(`議事録生成中... (チャンク1/${chunkCount}を処理中)`);
+        let currentChunk = 1;
+        const progressInterval = setInterval(() => {
+          if (currentChunk < chunkCount) {
+            currentChunk++;
+            setProcessingProgress(`議事録生成中... (チャンク${currentChunk}/${chunkCount}を処理中)`);
+          } else {
+            setProcessingProgress(`議事録生成中... (最終統合処理中)`);
+            clearInterval(progressInterval);
+          }
+        }, 25000);
 
-      const updated = updateProject(projectId!, {
-        minutes: result.minutes,
-        tokenUsage: {
-          ...project.tokenUsage,
-          minutes: result.tokenUsage,
-        },
-      });
-      if (updated) setProject(updated);
-      toast.success("議事録が生成されました");
+        try {
+          const result = await minutesMutation.mutateAsync({
+            transcription: project.transcription,
+            template: minutesTemplate,
+            metadata: minutesMetadata,
+          });
+          clearInterval(progressInterval);
+          setProcessingProgress(null);
+
+          const updated = updateProject(projectId!, {
+            minutes: result.minutes,
+            tokenUsage: {
+              ...project.tokenUsage,
+              minutes: result.tokenUsage,
+            },
+          });
+          if (updated) setProject(updated);
+          toast.success(`議事録が生成されました（${result.chunkCount}チャンクを処理）`);
+        } catch (error) {
+          clearInterval(progressInterval);
+          throw error;
+        }
+      } else {
+        setProcessingProgress("議事録生成中...");
+        const result = await minutesMutation.mutateAsync({
+          transcription: project.transcription,
+          template: minutesTemplate,
+          metadata: minutesMetadata,
+        });
+        setProcessingProgress(null);
+
+        const updated = updateProject(projectId!, {
+          minutes: result.minutes,
+          tokenUsage: {
+            ...project.tokenUsage,
+            minutes: result.tokenUsage,
+          },
+        });
+        if (updated) setProject(updated);
+        toast.success("議事録が生成されました");
+      }
     } catch (error) {
+      setProcessingProgress(null);
       console.error("Minutes error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
       const ctx = JSON.stringify({
         transcriptionLength: project?.transcription?.length,
+        estimatedChunks: estimateChunkCount(project?.transcription || ""),
         template: minutesTemplate,
         userAgent: navigator.userAgent,
       });
+      await autoSaveError("generateMinutes", errMsg, ctx);
       toast.error(
         <div className="flex flex-col gap-2">
           <span>議事録の生成に失敗しました</span>
@@ -459,7 +597,7 @@ export default function ProjectDetail() {
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("generateMinutes", errMsg, ctx)}
           >
-            ▶ 報告する
+            ▶ 詳細を報告する（自動保存済み）
           </button>
         </div>
       );
@@ -473,28 +611,70 @@ export default function ProjectDetail() {
     }
 
     try {
-      const result = await karteMutation.mutateAsync({
-        transcription: project.transcription,
-        patientInfo: kartePatientInfo,
-      });
+      const chunkCount = estimateChunkCount(project.transcription);
+      if (chunkCount > 1) {
+        setProcessingProgress(`カルテ生成中... (チャンク1/${chunkCount}を処理中)`);
+        let currentChunk = 1;
+        const progressInterval = setInterval(() => {
+          if (currentChunk < chunkCount) {
+            currentChunk++;
+            setProcessingProgress(`カルテ生成中... (チャンク${currentChunk}/${chunkCount}を処理中)`);
+          } else {
+            setProcessingProgress(`カルテ生成中... (最終統合処理中)`);
+            clearInterval(progressInterval);
+          }
+        }, 25000);
 
-      const updated = updateProject(projectId!, {
-        karte: result.karte,
-        tokenUsage: {
-          ...project.tokenUsage,
-          karte: result.tokenUsage,
-        },
-      });
-      if (updated) setProject(updated);
-      toast.success("カルテが生成されました");
+        try {
+          const result = await karteMutation.mutateAsync({
+            transcription: project.transcription,
+            patientInfo: kartePatientInfo,
+          });
+          clearInterval(progressInterval);
+          setProcessingProgress(null);
+
+          const updated = updateProject(projectId!, {
+            karte: result.karte,
+            tokenUsage: {
+              ...project.tokenUsage,
+              karte: result.tokenUsage,
+            },
+          });
+          if (updated) setProject(updated);
+          toast.success(`カルテが生成されました（${result.chunkCount}チャンクを処理）`);
+        } catch (error) {
+          clearInterval(progressInterval);
+          throw error;
+        }
+      } else {
+        setProcessingProgress("カルテ生成中...");
+        const result = await karteMutation.mutateAsync({
+          transcription: project.transcription,
+          patientInfo: kartePatientInfo,
+        });
+        setProcessingProgress(null);
+
+        const updated = updateProject(projectId!, {
+          karte: result.karte,
+          tokenUsage: {
+            ...project.tokenUsage,
+            karte: result.tokenUsage,
+          },
+        });
+        if (updated) setProject(updated);
+        toast.success("カルテが生成されました");
+      }
     } catch (error) {
+      setProcessingProgress(null);
       console.error("Karte error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
       const ctx = JSON.stringify({
         transcriptionLength: project?.transcription?.length,
+        estimatedChunks: estimateChunkCount(project?.transcription || ""),
         patientInfo: kartePatientInfo,
         userAgent: navigator.userAgent,
       });
+      await autoSaveError("generateKarte", errMsg, ctx);
       toast.error(
         <div className="flex flex-col gap-2">
           <span>カルテの生成に失敗しました</span>
@@ -502,7 +682,7 @@ export default function ProjectDetail() {
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("generateKarte", errMsg, ctx)}
           >
-            ▶ 報告する
+            ▶ 詳細を報告する（自動保存済み）
           </button>
         </div>
       );
@@ -591,6 +771,9 @@ export default function ProjectDetail() {
   const tokenTotals = project?.tokenUsage ? getTotalTokens(project.tokenUsage) : { input: 0, output: 0 };
   const tokenCost = project?.tokenUsage ? calculateTokenCost(project.tokenUsage) : 0;
 
+  // 処理中かどうか
+  const isProcessing = transcribeMutation.isPending || summarizeMutation.isPending || minutesMutation.isPending || karteMutation.isPending;
+
   if (authLoading || subLoading || !project) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
@@ -633,6 +816,16 @@ export default function ProjectDetail() {
           </p>
         </div>
       </header>
+
+      {/* 処理中プログレスバー */}
+      {isProcessing && processingProgress && (
+        <div className="sticky top-[88px] z-40 bg-primary/10 backdrop-blur-sm border-b border-primary/20">
+          <div className="container py-2 flex items-center gap-3">
+            <Loader2 className="h-4 w-4 animate-spin text-primary flex-shrink-0" />
+            <span className="text-sm text-primary font-medium">{processingProgress}</span>
+          </div>
+        </div>
+      )}
 
       {/* メインコンテンツ */}
       <main className="container py-6 space-y-5 relative z-10">
@@ -772,6 +965,12 @@ export default function ProjectDetail() {
                     </SelectContent>
                   </Select>
                 </div>
+                {project.recordingDuration > 1800 && (
+                  <div className="p-3 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50 text-sm text-amber-800">
+                    <strong>注意:</strong> 30分以上の音声は書き起こしに数分かかる場合があります。
+                    処理中はページを閉じないでください。
+                  </div>
+                )}
                 <Button 
                   onClick={handleTranscribe}
                   disabled={transcribeMutation.isPending}
@@ -780,7 +979,7 @@ export default function ProjectDetail() {
                   {transcribeMutation.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      書き起こし中...
+                      {processingProgress || "書き起こし中..."}
                     </>
                   ) : (
                     "書き起こしを開始"
@@ -802,7 +1001,6 @@ export default function ProjectDetail() {
                     キャンセル
                   </Button>
                   <Button onClick={handleSaveTranscription} className="btn-gradient text-white border-0 rounded-xl">
-                    <Check className="h-4 w-4 mr-2" />
                     保存
                   </Button>
                 </div>
@@ -811,13 +1009,13 @@ export default function ProjectDetail() {
               <div className="space-y-4">
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                   {transcriptionSegments.map((segment, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-xl border-l-4 ${getSpeakerColor(segment.speaker)}`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`flex h-7 w-7 items-center justify-center rounded-full text-white text-xs font-bold ${getSpeakerIconColor(segment.speaker)}`}>
+                    <div key={index} className={`flex gap-3 p-3 rounded-xl ${getSpeakerColor(segment.speaker)}`}>
+                      <div className="flex-shrink-0">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${getSpeakerIconColor(segment.speaker)}`}>
                           {getSpeakerNumber(segment.speaker)}
+                        </div>
+                        <div className="text-xs text-center mt-1 font-medium text-muted-foreground">
+                          {segment.speaker}
                         </div>
                       </div>
                       <div className="text-sm whitespace-pre-wrap leading-relaxed pl-9">{segment.text}</div>
@@ -862,20 +1060,29 @@ export default function ProjectDetail() {
               {/* 要約タブ */}
               <TabsContent value="summary" className="mt-5">
                 {!project.summary ? (
-                  <Button 
-                    onClick={handleSummarize}
-                    disabled={summarizeMutation.isPending}
-                    className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
-                  >
-                    {summarizeMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        要約中...
-                      </>
-                    ) : (
-                      "要約を生成"
+                  <div className="space-y-3">
+                    {estimateChunkCount(project.transcription) > 1 && (
+                      <div className="p-3 rounded-xl bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 text-sm text-blue-800">
+                        <strong>長文テキスト検出:</strong> 書き起こしが長いため、
+                        {estimateChunkCount(project.transcription)}チャンクに分割して処理します。
+                        数分かかる場合があります。
+                      </div>
                     )}
-                  </Button>
+                    <Button 
+                      onClick={handleSummarize}
+                      disabled={summarizeMutation.isPending}
+                      className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
+                    >
+                      {summarizeMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          {processingProgress || "要約中..."}
+                        </>
+                      ) : (
+                        "要約を生成"
+                      )}
+                    </Button>
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
@@ -899,6 +1106,18 @@ export default function ProjectDetail() {
                       >
                         <Download className="h-4 w-4 mr-2" />
                         Word
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const updated = updateProject(projectId!, { summary: null });
+                          if (updated) setProject(updated);
+                        }}
+                        className="glass-button rounded-xl"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        再生成
                       </Button>
                     </div>
                   </div>
@@ -957,6 +1176,11 @@ export default function ProjectDetail() {
                         書き起こしテキストに明示的に記載されている情報のみが使用されます。
                       </div>
                     )}
+                    {estimateChunkCount(project.transcription) > 1 && (
+                      <div className="p-3 rounded-xl bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 text-sm text-blue-800">
+                        <strong>長文テキスト検出:</strong> {estimateChunkCount(project.transcription)}チャンクに分割して処理します。数分かかる場合があります。
+                      </div>
+                    )}
                     <Button 
                       onClick={handleGenerateMinutes}
                       disabled={minutesMutation.isPending}
@@ -965,7 +1189,7 @@ export default function ProjectDetail() {
                       {minutesMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          生成中...
+                          {processingProgress || "生成中..."}
                         </>
                       ) : (
                         "議事録を生成"
@@ -1077,6 +1301,11 @@ export default function ProjectDetail() {
                       <strong>注意:</strong> このカルテはAIによる自動生成です。
                       内容の正確性については必ず医師が確認してください。
                     </div>
+                    {estimateChunkCount(project.transcription) > 1 && (
+                      <div className="p-3 rounded-xl bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 text-sm text-blue-800">
+                        <strong>長文テキスト検出:</strong> {estimateChunkCount(project.transcription)}チャンクに分割して処理します。数分かかる場合があります。
+                      </div>
+                    )}
                     <Button 
                       onClick={handleGenerateKarte}
                       disabled={karteMutation.isPending}
@@ -1085,7 +1314,7 @@ export default function ProjectDetail() {
                       {karteMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          生成中...
+                          {processingProgress || "生成中..."}
                         </>
                       ) : (
                         "カルテを生成（SOAP形式）"
@@ -1182,7 +1411,7 @@ export default function ProjectDetail() {
               <Label className="text-sm font-medium">コメント（任意）</Label>
               <Textarea
                 className="mt-2 glass-input rounded-xl"
-                placeholder="例: 15分の音声を書き起こしした際に発生しました"
+                placeholder="例: 60分の音声を書き起こしした際に発生しました"
                 value={errorUserComment}
                 onChange={(e) => setErrorUserComment(e.target.value)}
                 rows={3}
@@ -1195,17 +1424,17 @@ export default function ProjectDetail() {
               onClick={() => setErrorReportInfo(null)}
               className="glass-button rounded-xl"
             >
-              キャンセル
+              閉じる
             </Button>
             <Button
               onClick={handleSubmitErrorReport}
-              disabled={reportMutation.isPending}
+              disabled={reportMutation.isPending || !errorUserComment.trim()}
               className="btn-gradient text-white border-0 rounded-xl"
             >
               {reportMutation.isPending ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />送信中...</>
               ) : (
-                "報告する"
+                "コメントを追加"
               )}
             </Button>
           </DialogFooter>

@@ -257,6 +257,7 @@ ${combinedSummaries}`;
 
       return {
         summary,
+        chunkCount: chunks.length,
         tokenUsage: {
           input: totalInputTokens,
           output: totalOutputTokens,
@@ -413,6 +414,7 @@ ${combinedSummaries}`;
 
       return {
         minutes,
+        chunkCount: chunks.length,
         tokenUsage: {
           input: totalInputTokens,
           output: totalOutputTokens,
@@ -494,6 +496,7 @@ ${combinedSummaries}`;
 
       return {
         karte,
+        chunkCount: chunks.length,
         tokenUsage: {
           input: totalInputTokens,
           output: totalOutputTokens,
