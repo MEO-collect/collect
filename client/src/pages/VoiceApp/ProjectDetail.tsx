@@ -53,7 +53,7 @@ import {
   calculateTokenCost,
   getTotalTokens
 } from "@/lib/projectStorage";
-import { saveAudio, getAudio } from "@/lib/indexedDB";
+import { saveAudio, getAudio, saveTranscriptionProgress, getTranscriptionProgress, clearTranscriptionProgress, type TranscriptionProgress } from "@/lib/indexedDB";
 import { useAudioRecorder, formatDuration } from "@/hooks/useAudioRecorder";
 import { Streamdown } from "streamdown";
 import { splitAudioBlob, blobToBase64, needsSplitting } from "@/lib/audioSplitter";
@@ -182,6 +182,10 @@ export default function ProjectDetail() {
   // 進捗表示用 state
   const [processingProgress, setProcessingProgress] = useState<string | null>(null);
 
+  // チャンク書き起こし再開確認ダイアログ用 state
+  const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
+  const [pendingProgress, setPendingProgress] = useState<TranscriptionProgress | null>(null);
+
   // エラー報告用 state
   const [errorReportInfo, setErrorReportInfo] = useState<{
     operation: string;
@@ -259,6 +263,20 @@ export default function ProjectDetail() {
       });
     }
   }, [projectId, project?.status]);
+
+  // ページ読み込み時に中断した書き起こし進捗がないか確認
+  useEffect(() => {
+    if (!projectId) return;
+    // 書き起こし未完了のプロジェクトのみチェック
+    if (project?.transcription) return;
+    getTranscriptionProgress(projectId).then((saved) => {
+      if (saved && saved.completedChunks.length > 0) {
+        setPendingProgress(saved);
+        setResumeDialogOpen(true);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   useEffect(() => {
     if (audioBlob && projectId) {
@@ -373,11 +391,34 @@ export default function ProjectDetail() {
         );
 
         const totalChunks = chunks.length;
-        const transcriptions: string[] = [];
-        let totalInputTokens = 0;
-        let totalOutputTokens = 0;
+
+        // ─ 再開時: 既存の進捗を読み込む ─
+        const existingProgress = await getTranscriptionProgress(projectId!);
+        const completedChunks: TranscriptionProgress["completedChunks"] =
+          existingProgress?.totalChunks === totalChunks
+            ? existingProgress.completedChunks
+            : [];
+
+        let totalInputTokens = completedChunks.reduce((s, c) => s + c.inputTokens, 0);
+        let totalOutputTokens = completedChunks.reduce((s, c) => s + c.outputTokens, 0);
+
+        // 既完了チャンクのインデックスセット
+        const completedIndexes = new Set(completedChunks.map((c) => c.index));
+        const resumedFrom = completedChunks.length;
+
+        if (resumedFrom > 0) {
+          toast.info(`チャンク${resumedFrom + 1}から再開します`);
+        }
 
         for (const chunk of chunks) {
+          // 既完了チャンクはスキップ
+          if (completedIndexes.has(chunk.index)) {
+            setProcessingProgress(
+              `チャンク${chunk.index + 1}/${totalChunks}は完了済み—スキップ`,
+            );
+            continue;
+          }
+
           setProcessingProgress(
             `書き起こし中... (チャンク${chunk.index + 1}/${totalChunks} | ${Math.floor(chunk.startSec / 60)}分〜${Math.floor(chunk.endSec / 60)}分)`,
           );
@@ -385,9 +426,13 @@ export default function ProjectDetail() {
           const audioBase64 = await blobToBase64(chunk.blob);
 
           // 前のチャンクの末尾200文字をコンテキストとして渡す
-          const previousContext = transcriptions.length > 0
-            ? transcriptions[transcriptions.length - 1].slice(-200)
-            : undefined;
+          const prevCompleted = completedChunks
+            .filter((c) => c.index < chunk.index)
+            .sort((a, b) => a.index - b.index);
+          const previousContext =
+            prevCompleted.length > 0
+              ? prevCompleted[prevCompleted.length - 1].transcription.slice(-200)
+              : undefined;
 
           const result = await transcribeChunkMutation.mutateAsync({
             audioBase64,
@@ -398,23 +443,42 @@ export default function ProjectDetail() {
             previousContext,
           });
 
-          transcriptions.push(result.transcription);
+          // チャンク結果を追加
+          completedChunks.push({
+            index: chunk.index,
+            startSec: chunk.startSec,
+            endSec: chunk.endSec,
+            transcription: result.transcription,
+            inputTokens: result.tokenUsage.input,
+            outputTokens: result.tokenUsage.output,
+          });
           totalInputTokens += result.tokenUsage.input;
           totalOutputTokens += result.tokenUsage.output;
+
+          // チャンク完了ごとにIndexedDBに保存
+          await saveTranscriptionProgress({
+            id: projectId!,
+            completedChunks: [...completedChunks],
+            totalChunks,
+            speakerCount: speakerCountNum,
+            savedAt: Date.now(),
+          });
         }
 
         setProcessingProgress("書き起こし結果を統合中...");
 
-        // チャンク間の区切りを追加して結合
-        const fullTranscription = transcriptions
-          .map((t, i) => {
-            const chunk = chunks[i];
-            const startMin = Math.floor(chunk.startSec / 60);
-            const endMin = Math.floor(chunk.endSec / 60);
-            return `--- [${startMin}分〜${endMin}分] ---\n${t.trim()}`;
+        // index順にソートして結合
+        const sortedChunks = [...completedChunks].sort((a, b) => a.index - b.index);
+        const fullTranscription = sortedChunks
+          .map((c) => {
+            const startMin = Math.floor(c.startSec / 60);
+            const endMin = Math.floor(c.endSec / 60);
+            return `--- [${startMin}分〜${endMin}分] ---\n${c.transcription.trim()}`;
           })
           .join("\n\n");
 
+        // 完了後はIndexedDBの中間進捗を削除
+        await clearTranscriptionProgress(projectId!);
         setProcessingProgress(null);
 
         const updated = updateProject(projectId!, {
@@ -430,7 +494,8 @@ export default function ProjectDetail() {
           setProject(updated);
           setEditedTranscription(fullTranscription);
         }
-        toast.success(`書き起こしが完了しました（${totalChunks}チャンクに分割して処理）`);
+        const resumeMsg = resumedFrom > 0 ? `（チャンク${resumedFrom + 1}から再開）` : "";
+        toast.success(`書き起こしが完了しました（${totalChunks}チャンク${resumeMsg}）`);
         return;
       }
 
@@ -1494,6 +1559,61 @@ export default function ProjectDetail() {
               ) : (
                 "コメントを追加"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 書き起こし再開確認ダイアログ */}
+      <Dialog open={resumeDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          // ダイアログを閉じるだけ（進捗は保持）
+          setResumeDialogOpen(false);
+        }
+      }}>
+        <DialogContent className="glass-card border-0">
+          <DialogHeader>
+            <DialogTitle>書き起こしを再開しますか？</DialogTitle>
+            <DialogDescription>
+              前回の書き起こしが途中で中断されています。
+            </DialogDescription>
+          </DialogHeader>
+          {pendingProgress && (
+            <div className="py-4 space-y-3">
+              <div className="p-3 rounded-xl bg-primary/10 text-sm space-y-1">
+                <p>完了済み: <strong>{pendingProgress.completedChunks.length} / {pendingProgress.totalChunks} チャンク</strong></p>
+                <p>保存日時: {new Date(pendingProgress.savedAt).toLocaleString("ja-JP")}</p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                「再開」を選ぶと、完了済みのチャンクをスキップして続きから処理します。
+                「最初から」を選ぶと、保存された進捗を削除して全チャンクを再処理します。
+              </p>
+            </div>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                // 進捗を削除して最初から再実行
+                if (projectId) await clearTranscriptionProgress(projectId);
+                setPendingProgress(null);
+                setResumeDialogOpen(false);
+                handleTranscribe();
+              }}
+              className="glass-button rounded-xl"
+            >
+              最初から
+            </Button>
+            <Button
+              onClick={() => {
+                // 進捗を保持したまま再開
+                setPendingProgress(null);
+                setResumeDialogOpen(false);
+                handleTranscribe();
+              }}
+              className="btn-gradient text-white border-0 rounded-xl"
+            >
+              再開
             </Button>
           </DialogFooter>
         </DialogContent>
