@@ -56,6 +56,7 @@ import {
 import { saveAudio, getAudio } from "@/lib/indexedDB";
 import { useAudioRecorder, formatDuration } from "@/hooks/useAudioRecorder";
 import { Streamdown } from "streamdown";
+import { splitAudioBlob, blobToBase64, needsSplitting } from "@/lib/audioSplitter";
 
 // フロントエンドでチャンク数を推定（バックエンドと同じ8000文字単位）
 const CHUNK_SIZE = 8000;
@@ -233,6 +234,7 @@ export default function ProjectDetail() {
   } = useAudioRecorder();
 
   const transcribeMutation = trpc.voice.transcribe.useMutation();
+  const transcribeChunkMutation = trpc.voice.transcribeChunk.useMutation();
   const summarizeMutation = trpc.voice.summarize.useMutation();
   const minutesMutation = trpc.voice.generateMinutes.useMutation();
   const karteMutation = trpc.voice.generateKarte.useMutation();
@@ -353,40 +355,96 @@ export default function ProjectDetail() {
       }
       if (!blob) return;
 
-      // ファイルサイズを確認
       const fileSizeMB = blob.size / (1024 * 1024);
-      if (fileSizeMB > 15) {
+      const speakerCountNum = speakerCount === "auto" ? null : parseInt(speakerCount);
+
+      // ─── 15MB超の場合は自動分割して逐次書き起こし ───
+      if (needsSplitting(blob)) {
+        setProcessingProgress(`音声が大きいため自動分割します... (${fileSizeMB.toFixed(1)}MB)`);
+
+        // 音声を分割
+        const chunks = await splitAudioBlob(
+          blob,
+          12 * 1024 * 1024, // 12MB/チャンク
+          600,              // 最大10分/チャンク
+          (progress, message) => {
+            setProcessingProgress(message);
+          },
+        );
+
+        const totalChunks = chunks.length;
+        const transcriptions: string[] = [];
+        let totalInputTokens = 0;
+        let totalOutputTokens = 0;
+
+        for (const chunk of chunks) {
+          setProcessingProgress(
+            `書き起こし中... (チャンク${chunk.index + 1}/${totalChunks} | ${Math.floor(chunk.startSec / 60)}分〜${Math.floor(chunk.endSec / 60)}分)`,
+          );
+
+          const audioBase64 = await blobToBase64(chunk.blob);
+
+          // 前のチャンクの末尾200文字をコンテキストとして渡す
+          const previousContext = transcriptions.length > 0
+            ? transcriptions[transcriptions.length - 1].slice(-200)
+            : undefined;
+
+          const result = await transcribeChunkMutation.mutateAsync({
+            audioBase64,
+            mimeType: "audio/wav",
+            speakerCount: speakerCountNum,
+            chunkIndex: chunk.index,
+            totalChunks,
+            previousContext,
+          });
+
+          transcriptions.push(result.transcription);
+          totalInputTokens += result.tokenUsage.input;
+          totalOutputTokens += result.tokenUsage.output;
+        }
+
+        setProcessingProgress("書き起こし結果を統合中...");
+
+        // チャンク間の区切りを追加して結合
+        const fullTranscription = transcriptions
+          .map((t, i) => {
+            const chunk = chunks[i];
+            const startMin = Math.floor(chunk.startSec / 60);
+            const endMin = Math.floor(chunk.endSec / 60);
+            return `--- [${startMin}分〜${endMin}分] ---\n${t.trim()}`;
+          })
+          .join("\n\n");
+
         setProcessingProgress(null);
-        const errMsg = `音声ファイルが大きすぎます（${fileSizeMB.toFixed(1)}MB）。15MB以下の音声ファイルのみ対応しています。`;
-        toast.error(errMsg);
-        const ctx = JSON.stringify({
-          fileSizeMB: fileSizeMB.toFixed(1),
-          duration: project?.recordingDuration,
-          mimeType: blob.type,
-          userAgent: navigator.userAgent,
+
+        const updated = updateProject(projectId!, {
+          transcription: fullTranscription,
+          status: "transcribed",
+          tokenUsage: {
+            ...project?.tokenUsage,
+            transcription: { input: totalInputTokens, output: totalOutputTokens },
+          },
+          speakerCount: speakerCountNum,
         });
-        await autoSaveError("transcribe", errMsg, ctx);
+        if (updated) {
+          setProject(updated);
+          setEditedTranscription(fullTranscription);
+        }
+        toast.success(`書き起こしが完了しました（${totalChunks}チャンクに分割して処理）`);
         return;
       }
 
+      // ─── 15MB以下の場合は通常の書き起こし ───
       setProcessingProgress(`書き起こし中... (${fileSizeMB.toFixed(1)}MB)`);
 
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(",")[1];
-          resolve(base64);
-        };
-      });
-      reader.readAsDataURL(blob);
-      const audioBase64 = await base64Promise;
+      const audioBase64 = await blobToBase64(blob);
 
       setProcessingProgress("AIが音声を解析中... (数分かかる場合があります)");
 
       const result = await transcribeMutation.mutateAsync({
         audioBase64,
         mimeType: blob.type || "audio/webm",
-        speakerCount: speakerCount === "auto" ? null : parseInt(speakerCount),
+        speakerCount: speakerCountNum,
       });
 
       setProcessingProgress(null);
@@ -398,7 +456,7 @@ export default function ProjectDetail() {
           ...project?.tokenUsage,
           transcription: result.tokenUsage,
         },
-        speakerCount: speakerCount === "auto" ? null : parseInt(speakerCount),
+        speakerCount: speakerCountNum,
       });
       if (updated) {
         setProject(updated);
@@ -772,7 +830,7 @@ export default function ProjectDetail() {
   const tokenCost = project?.tokenUsage ? calculateTokenCost(project.tokenUsage) : 0;
 
   // 処理中かどうか
-  const isProcessing = transcribeMutation.isPending || summarizeMutation.isPending || minutesMutation.isPending || karteMutation.isPending;
+  const isProcessing = transcribeMutation.isPending || transcribeChunkMutation.isPending || summarizeMutation.isPending || minutesMutation.isPending || karteMutation.isPending;
 
   if (authLoading || subLoading || !project) {
     return (
@@ -966,17 +1024,17 @@ export default function ProjectDetail() {
                   </Select>
                 </div>
                 {project.recordingDuration > 1800 && (
-                  <div className="p-3 rounded-xl bg-amber-50/80 backdrop-blur-sm border border-amber-200/50 text-sm text-amber-800">
-                    <strong>注意:</strong> 30分以上の音声は書き起こしに数分かかる場合があります。
+                  <div className="p-3 rounded-xl bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 text-sm text-blue-800">
+                    <strong>長時間音声:</strong> 30分以上の音声は自動的に分割して逐次書き起こしします。
                     処理中はページを閉じないでください。
                   </div>
                 )}
                 <Button 
                   onClick={handleTranscribe}
-                  disabled={transcribeMutation.isPending}
+                  disabled={transcribeMutation.isPending || transcribeChunkMutation.isPending}
                   className="w-full btn-gradient text-white border-0 h-12 rounded-xl"
                 >
-                  {transcribeMutation.isPending ? (
+                  {(transcribeMutation.isPending || transcribeChunkMutation.isPending) ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       {processingProgress || "書き起こし中..."}

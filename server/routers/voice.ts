@@ -182,6 +182,81 @@ export const voiceRouter = router({
       };
     }),
 
+  transcribeChunk: subscribedProcedure
+    .input(z.object({
+      audioBase64: z.string(),
+      mimeType: z.string().default("audio/wav"),
+      speakerCount: z.number().nullable(),
+      chunkIndex: z.number(),
+      totalChunks: z.number(),
+      previousContext: z.string().optional(), // 前のチャンクの末尾部分（話者の継続性のため）
+    }))
+    .mutation(async ({ input }) => {
+      const { audioBase64, mimeType, speakerCount, chunkIndex, totalChunks, previousContext } = input;
+
+      const contextNote = previousContext
+        ? `\n\n前のチャンクの末尾部分（話者の継続性のための参考）:\n${previousContext}`
+        : "";
+
+      const systemPrompt = `あなたは高精度な音声書き起こしの専門家です。以下のルールに厳密に従って書き起こしを行ってください：
+
+1. 話者のラベル付けルール：
+   - ${getSpeakerPrompt(speakerCount)}
+   - 必ず「[話者1]」「[話者2]」のような形式を使用してください
+   - 「話１」「Aさん」「Speaker1」などの表記は絶対に使用しないでください
+   - 話者が変わるたびに改行し、新しい話者ラベルを付けてください
+
+2. 書き起こしの品質：
+   - 聴き取れた内容を正確に文字起こししてください
+   - 句読点を適切に使用してください
+   - 聴き取れない部分は「（聴き取れず）」と記載してください
+
+3. チャンク情報：
+   - これは全${totalChunks}チャンクの第${chunkIndex + 1}チャンクです
+   - 前のチャンクと話者ラベルを統一してください${contextNote}
+
+4. 出力形式：
+   [話者1]: 発言内容
+   [話者2]: 発言内容
+   ...
+
+音声を書き起こしてください。`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "file_url",
+                file_url: {
+                  url: `data:${mimeType};base64,${audioBase64}`,
+                  mime_type: mimeType as "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4",
+                },
+              },
+              {
+                type: "text",
+                text: `この音声（全${totalChunks}チャンクの第${chunkIndex + 1}チャンク）を書き起こしてください。`,
+              },
+            ],
+          },
+        ],
+      });
+
+      const content = response.choices[0]?.message?.content;
+      const transcription = typeof content === "string" ? content : "";
+      const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0 };
+
+      return {
+        transcription,
+        tokenUsage: {
+          input: usage.prompt_tokens,
+          output: usage.completion_tokens,
+        },
+      };
+    }),
+
   summarize: subscribedProcedure
     .input(z.object({
       transcription: z.string(),
