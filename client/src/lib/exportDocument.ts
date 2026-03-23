@@ -50,27 +50,27 @@ function cleanupClonedElement(clone: HTMLElement): void {
 
     // 枠線を細く統一
     const borderWidth = parseFloat(computed.borderWidth || "0");
-    if (borderWidth > 1) {
-      elem.style.border = "1px solid #e5e7eb";
+    if (borderWidth > 0.5) {
+      elem.style.border = "0.5px solid #e5e7eb";
     }
 
     // table / th / td の枠線を細く
     if (tag === "table" || tag === "th" || tag === "td") {
-      elem.style.border = "1px solid #d1d5db";
+      elem.style.border = "0.5px solid #d1d5db";
       elem.style.borderCollapse = "collapse";
     }
 
     // h1/h2/h3 の下線を細く
     if (tag === "h1" || tag === "h2" || tag === "h3") {
       const borderBottomWidth = parseFloat(computed.borderBottomWidth || "0");
-      if (borderBottomWidth > 1) {
-        elem.style.borderBottom = "1px solid #e5e7eb";
+      if (borderBottomWidth > 0.5) {
+        elem.style.borderBottom = "0.5px solid #e5e7eb";
       }
     }
 
     // blockquote の左線を細く
     if (tag === "blockquote") {
-      elem.style.borderLeft = "3px solid #d1d5db";
+      elem.style.borderLeft = "1px solid #d1d5db";
     }
 
     // box-shadow を除去
