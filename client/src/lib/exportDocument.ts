@@ -22,10 +22,11 @@ export async function downloadAsPng(element: HTMLElement, filename: string): Pro
       quality: 1,
       scale: 2,
       bgcolor: "#ffffff",
-      // クロスオリジンリソースのキャッシュバスト（CORS回避）
+      // 外部フォント（Google Fonts等）のCSSルール読み取りをスキップしてCORSエラーを回避
+      // フォントはブラウザキャッシュから描画されるため見た目への影響はない
+      disableEmbedFonts: true,
+      // クロスオリジンリソースのキャッシュバスト
       cacheBust: true,
-      // 外部フォント読み込みエラーを無視してキャプチャを続行
-      filter: () => true,
     });
 
     const link = document.createElement("a");

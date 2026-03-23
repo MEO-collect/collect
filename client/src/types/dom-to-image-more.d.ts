@@ -9,6 +9,8 @@ declare module "dom-to-image-more" {
     filter?: (node: Node) => boolean;
     imagePlaceholder?: string;
     cacheBust?: boolean;
+    disableEmbedFonts?: boolean;
+    disableInlineImages?: boolean;
   }
 
   function toPng(node: HTMLElement, options?: Options): Promise<string>;
