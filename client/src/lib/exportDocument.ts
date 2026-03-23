@@ -1,26 +1,101 @@
 /**
  * カルテ・議事録のPDF/PNG出力ユーティリティ
  *
- * PNG: dom-to-image-more を使用（backdrop-filter 対応）
+ * PNG: html2canvas を使用（CORS問題を回避するためbackdrop-filterを事前除去）
  * PDF: ブラウザの印刷ダイアログ経由（日本語・スタイル完全対応）
  */
 
 /**
+ * html2canvas が苦手な CSS プロパティを一時的に除去してキャプチャし、元に戻す
+ * - backdrop-filter: html2canvasが非対応
+ * - 外部フォント(Google Fonts等): CORSエラーを避けるためシステムフォントにフォールバック
+ */
+async function captureWithHtml2canvas(element: HTMLElement): Promise<HTMLCanvasElement> {
+  const html2canvas = (await import("html2canvas")).default;
+
+  // backdrop-filter を持つ全子孫要素を一時的に無効化
+  const affectedBackdrop: Array<{ el: HTMLElement; original: string; webkitOriginal: string }> = [];
+  element.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const computed = window.getComputedStyle(el);
+    const bf =
+      computed.backdropFilter ||
+      computed.getPropertyValue("-webkit-backdrop-filter");
+    if (bf && bf !== "none") {
+      affectedBackdrop.push({
+        el,
+        original: el.style.backdropFilter,
+        webkitOriginal: (el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter ?? "",
+      });
+      el.style.backdropFilter = "none";
+      (el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "none";
+    }
+  });
+  // 対象要素自身も処理
+  const selfBf = element.style.backdropFilter;
+  element.style.backdropFilter = "none";
+
+  // フォントをシステムフォントに一時変更（Google Fonts CORSエラー回避）
+  const affectedFont: Array<{ el: HTMLElement; original: string }> = [];
+  [element, ...Array.from(element.querySelectorAll<HTMLElement>("*"))].forEach((el) => {
+    if (el.style.fontFamily) {
+      affectedFont.push({ el, original: el.style.fontFamily });
+    }
+  });
+  const rootOriginalFont = document.documentElement.style.fontFamily;
+  // フォントファミリーをシステムフォントに上書き（キャプチャ用）
+  element.style.fontFamily =
+    "'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif";
+
+  try {
+    return await html2canvas(element, {
+      scale: 2,
+      useCORS: false,       // 外部リソースのCORSを無効化
+      allowTaint: true,     // クロスオリジンコンテンツを許可（taintedでもOK）
+      backgroundColor: "#ffffff",
+      logging: false,
+      removeContainer: true,
+      // 外部スタイルシート（Google Fonts等）を無視
+      onclone: (clonedDoc) => {
+        // クローン内の外部スタイルシートリンクを削除してCORSエラーを防ぐ
+        clonedDoc.querySelectorAll<HTMLLinkElement>("link[rel='stylesheet']").forEach((link) => {
+          if (
+            link.href.includes("fonts.googleapis.com") ||
+            link.href.includes("fonts.gstatic.com")
+          ) {
+            link.remove();
+          }
+        });
+        // クローン内のbackdrop-filterも除去
+        clonedDoc.querySelectorAll<HTMLElement>("*").forEach((el) => {
+          const s = el.style;
+          if (s.backdropFilter) s.backdropFilter = "none";
+          (s as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "none";
+        });
+      },
+    });
+  } finally {
+    // 元に戻す
+    element.style.backdropFilter = selfBf;
+    element.style.fontFamily = "";
+    affectedBackdrop.forEach(({ el, original, webkitOriginal }) => {
+      el.style.backdropFilter = original;
+      (el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = webkitOriginal;
+    });
+    affectedFont.forEach(({ el, original }) => {
+      el.style.fontFamily = original;
+    });
+    document.documentElement.style.fontFamily = rootOriginalFont;
+  }
+}
+
+/**
  * HTML要素をPNGとしてダウンロード
- * dom-to-image-more を使用することで backdrop-filter などのCSSも正確にレンダリング
  */
 export async function downloadAsPng(element: HTMLElement, filename: string): Promise<void> {
-  const domtoimage = await import("dom-to-image-more");
-
-  const dataUrl: string = await domtoimage.toPng(element, {
-    quality: 1,
-    scale: 2,
-    bgcolor: "#ffffff",
-  });
-
+  const canvas = await captureWithHtml2canvas(element);
   const link = document.createElement("a");
   link.download = `${filename}.png`;
-  link.href = dataUrl;
+  link.href = canvas.toDataURL("image/png");
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -48,7 +123,7 @@ export async function downloadAsPdf(element: HTMLElement, filename: string): Pro
     throw new Error("iframe document not available");
   }
 
-  // 現在のページのスタイルシートを全てコピー
+  // 現在のページのスタイルシートを全てコピー（クロスオリジンは除外）
   const styles = Array.from(document.styleSheets)
     .map((sheet) => {
       try {
@@ -62,11 +137,6 @@ export async function downloadAsPdf(element: HTMLElement, filename: string): Pro
     })
     .join("\n");
 
-  // Google Fontsなどの外部リンクをコピー
-  const linkTags = Array.from(document.querySelectorAll("link[rel='stylesheet']"))
-    .map((link) => link.outerHTML)
-    .join("\n");
-
   iframeDoc.open();
   iframeDoc.write(`
     <!DOCTYPE html>
@@ -74,7 +144,6 @@ export async function downloadAsPdf(element: HTMLElement, filename: string): Pro
       <head>
         <meta charset="UTF-8">
         <title>${filename}</title>
-        ${linkTags}
         <style>
           ${styles}
           @media print {
@@ -91,7 +160,7 @@ export async function downloadAsPdf(element: HTMLElement, filename: string): Pro
             }
           }
           body {
-            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
             background: white;
             color: black;
             padding: 16px;
