@@ -10,12 +10,85 @@
 import domtoimage from "dom-to-image-more";
 
 /**
+ * PNG出力用のスタイルを一時的に適用して、出力後に元に戻す
+ * - prose クラスの太いボーダーを細く変更
+ * - backdrop-filter を無効化
+ * - 背景を白に統一
+ */
+function applyPngExportStyles(element: HTMLElement): () => void {
+  const styleId = "__png-export-style__";
+
+  // 既存のスタイルタグがあれば削除
+  document.getElementById(styleId)?.remove();
+
+  const style = document.createElement("style");
+  style.id = styleId;
+  style.textContent = `
+    /* PNG出力用一時スタイル */
+    [data-png-export] * {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    [data-png-export] table,
+    [data-png-export] th,
+    [data-png-export] td {
+      border: 1px solid #d1d5db !important;
+      border-collapse: collapse !important;
+    }
+    [data-png-export] hr {
+      border: none !important;
+      border-top: 1px solid #e5e7eb !important;
+    }
+    [data-png-export] blockquote {
+      border-left: 3px solid #d1d5db !important;
+    }
+    [data-png-export] h1,
+    [data-png-export] h2,
+    [data-png-export] h3 {
+      border-bottom: 1px solid #e5e7eb !important;
+      padding-bottom: 4px !important;
+    }
+    [data-png-export] pre,
+    [data-png-export] code {
+      border: 1px solid #e5e7eb !important;
+    }
+    /* prose クラスのデフォルト太枠を上書き */
+    [data-png-export] .prose table {
+      border: 1px solid #d1d5db !important;
+    }
+    [data-png-export] .prose thead th {
+      border: 1px solid #d1d5db !important;
+      background-color: #f9fafb !important;
+    }
+    [data-png-export] .prose tbody td {
+      border: 1px solid #e5e7eb !important;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // 対象要素にdata属性を付与
+  element.setAttribute("data-png-export", "true");
+
+  // 元のスタイルを保存して返す（クリーンアップ関数）
+  return () => {
+    element.removeAttribute("data-png-export");
+    document.getElementById(styleId)?.remove();
+  };
+}
+
+/**
  * HTML要素をPNGとしてダウンロード
  */
 export async function downloadAsPng(element: HTMLElement, filename: string): Promise<void> {
   // キャプチャ前にスクロール位置を先頭に戻す（切れ防止）
   const scrollTop = element.scrollTop;
   element.scrollTop = 0;
+
+  // PNG出力用スタイルを一時適用
+  const cleanup = applyPngExportStyles(element);
+
+  // スタイル適用後に少し待つ（レンダリング反映）
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   try {
     const dataUrl = await domtoimage.toPng(element, {
@@ -36,6 +109,7 @@ export async function downloadAsPng(element: HTMLElement, filename: string): Pro
     link.click();
     document.body.removeChild(link);
   } finally {
+    cleanup();
     element.scrollTop = scrollTop;
   }
 }
@@ -96,12 +170,19 @@ export async function downloadAsPdf(element: HTMLElement, filename: string): Pro
               -webkit-backdrop-filter: none !important;
               box-shadow: none !important;
             }
+            table, th, td {
+              border: 1px solid #d1d5db !important;
+            }
           }
           body {
             font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
             background: white;
             color: black;
             padding: 16px;
+          }
+          table, th, td {
+            border: 1px solid #d1d5db !important;
+            border-collapse: collapse;
           }
         </style>
       </head>
