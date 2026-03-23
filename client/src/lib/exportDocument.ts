@@ -1,86 +1,122 @@
 /**
  * カルテ・議事録のPDF/PNG出力ユーティリティ
+ *
+ * PNG: dom-to-image-more を使用（backdrop-filter 対応）
+ * PDF: ブラウザの印刷ダイアログ経由（日本語・スタイル完全対応）
  */
-
-/**
- * html2canvas が苦手な CSS プロパティを一時的に除去してキャプチャし、元に戻す
- * backdrop-filter / filter / mix-blend-mode などが対象
- */
-async function captureElement(element: HTMLElement): Promise<HTMLCanvasElement> {
-  const html2canvas = (await import("html2canvas")).default;
-
-  // backdrop-filter を持つ全子孫要素を一時的に無効化
-  const affected: Array<{ el: HTMLElement; original: string }> = [];
-  element.querySelectorAll<HTMLElement>("*").forEach((el) => {
-    const style = window.getComputedStyle(el);
-    const bf = style.backdropFilter || style.getPropertyValue("-webkit-backdrop-filter");
-    if (bf && bf !== "none") {
-      affected.push({ el, original: el.style.backdropFilter });
-      el.style.backdropFilter = "none";
-      (el.style as CSSStyleDeclaration & { webkitBackdropFilter?: string }).webkitBackdropFilter = "none";
-    }
-  });
-  // 対象要素自身も処理
-  const selfBf = element.style.backdropFilter;
-  element.style.backdropFilter = "none";
-
-  try {
-    return await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      removeContainer: true,
-    });
-  } finally {
-    // 元に戻す
-    element.style.backdropFilter = selfBf;
-    affected.forEach(({ el, original }) => {
-      el.style.backdropFilter = original;
-    });
-  }
-}
 
 /**
  * HTML要素をPNGとしてダウンロード
+ * dom-to-image-more を使用することで backdrop-filter などのCSSも正確にレンダリング
  */
 export async function downloadAsPng(element: HTMLElement, filename: string): Promise<void> {
-  const canvas = await captureElement(element);
+  const domtoimage = await import("dom-to-image-more");
+
+  const dataUrl: string = await domtoimage.toPng(element, {
+    quality: 1,
+    scale: 2,
+    bgcolor: "#ffffff",
+  });
+
   const link = document.createElement("a");
   link.download = `${filename}.png`;
-  link.href = canvas.toDataURL("image/png");
+  link.href = dataUrl;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 }
 
 /**
- * HTML要素をPDFとしてダウンロード
+ * HTML要素の内容をPDFとして保存
+ * ブラウザの印刷ダイアログを使用することで日本語・スタイルを完全に保持
+ * ユーザーは印刷ダイアログで「PDFとして保存」を選択する
  */
 export async function downloadAsPdf(element: HTMLElement, filename: string): Promise<void> {
-  const { jsPDF } = await import("jspdf");
+  // 印刷用のiframeを作成して内容を複製
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.top = "-9999px";
+  iframe.style.left = "-9999px";
+  iframe.style.width = "210mm";
+  iframe.style.height = "297mm";
+  iframe.style.border = "none";
+  document.body.appendChild(iframe);
 
-  const canvas = await captureElement(element);
-
-  const imgData = canvas.toDataURL("image/png");
-  const imgWidth = 210; // A4 width in mm
-  const pageHeight = 297; // A4 height in mm
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-  const pdf = new jsPDF("p", "mm", "a4");
-  let heightLeft = imgHeight;
-  let position = 0;
-
-  pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-  heightLeft -= pageHeight;
-
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    document.body.removeChild(iframe);
+    throw new Error("iframe document not available");
   }
 
-  pdf.save(`${filename}.pdf`);
+  // 現在のページのスタイルシートを全てコピー
+  const styles = Array.from(document.styleSheets)
+    .map((sheet) => {
+      try {
+        return Array.from(sheet.cssRules)
+          .map((rule) => rule.cssText)
+          .join("\n");
+      } catch {
+        // クロスオリジンのスタイルシートは無視
+        return "";
+      }
+    })
+    .join("\n");
+
+  // Google Fontsなどの外部リンクをコピー
+  const linkTags = Array.from(document.querySelectorAll("link[rel='stylesheet']"))
+    .map((link) => link.outerHTML)
+    .join("\n");
+
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>${filename}</title>
+        ${linkTags}
+        <style>
+          ${styles}
+          @media print {
+            body {
+              margin: 0;
+              padding: 16px;
+              background: white !important;
+              color: black !important;
+            }
+            * {
+              backdrop-filter: none !important;
+              -webkit-backdrop-filter: none !important;
+              box-shadow: none !important;
+            }
+          }
+          body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            background: white;
+            color: black;
+            padding: 16px;
+          }
+        </style>
+      </head>
+      <body>
+        ${element.innerHTML}
+      </body>
+    </html>
+  `);
+  iframeDoc.close();
+
+  // フォントなどの読み込みを待つ
+  await new Promise<void>((resolve) => {
+    iframe.onload = () => resolve();
+    setTimeout(resolve, 800);
+  });
+
+  // 印刷ダイアログを開く
+  iframe.contentWindow?.focus();
+  iframe.contentWindow?.print();
+
+  // ダイアログが閉じた後にiframeを削除
+  setTimeout(() => {
+    document.body.removeChild(iframe);
+  }, 2000);
 }

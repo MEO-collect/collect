@@ -204,11 +204,16 @@ export default function ProjectDetail() {
     if (!minutesRef.current) return;
     const name = `${project?.name || "議事録"}_議事録`;
     try {
-      if (type === "png") await downloadAsPng(minutesRef.current, name);
-      else await downloadAsPdf(minutesRef.current, name);
-      toast.success(`議事録を${type.toUpperCase()}で保存しました`);
-    } catch {
-      toast.error("保存に失敗しました");
+      if (type === "png") {
+        await downloadAsPng(minutesRef.current, name);
+        toast.success("議事録をPNGで保存しました");
+      } else {
+        await downloadAsPdf(minutesRef.current, name);
+        toast.success("印刷ダイアログが開きました。「PDFとして保存」を選択してください。", { duration: 5000 });
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      toast.error("保存に失敗しました。コピー機能をお使いください。");
     }
   }, [project?.name]);
 
@@ -216,11 +221,16 @@ export default function ProjectDetail() {
     if (!karteRef.current) return;
     const name = `${project?.name || "カルテ"}_カルテ`;
     try {
-      if (type === "png") await downloadAsPng(karteRef.current, name);
-      else await downloadAsPdf(karteRef.current, name);
-      toast.success(`カルテを${type.toUpperCase()}で保存しました`);
-    } catch {
-      toast.error("保存に失敗しました");
+      if (type === "png") {
+        await downloadAsPng(karteRef.current, name);
+        toast.success("カルテをPNGで保存しました");
+      } else {
+        await downloadAsPdf(karteRef.current, name);
+        toast.success("印刷ダイアログが開きました。「PDFとして保存」を選択してください。", { duration: 5000 });
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      toast.error("保存に失敗しました。コピー機能をお使いください。");
     }
   }, [project?.name]);
 
