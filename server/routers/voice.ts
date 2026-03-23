@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
+import { getKarteFormat, DEFAULT_KARTE_FORMAT_ID } from "../../shared/karteFormats";
 
 const SPEAKER_LABELS = ["話者1", "話者2", "話者3", "話者4"];
 
@@ -500,6 +501,7 @@ ${combinedSummaries}`;
   generateKarte: subscribedProcedure
     .input(z.object({
       transcription: z.string(),
+      formatId: z.string().optional(),
       patientInfo: z.object({
         patientId: z.string().optional(),
         patientName: z.string().optional(),
@@ -508,65 +510,20 @@ ${combinedSummaries}`;
       }).optional(),
     }))
     .mutation(async ({ input }) => {
-      const { transcription, patientInfo } = input;
+      const { transcription, patientInfo, formatId } = input;
 
-      const systemPrompt = `あなたは経験豊富な医療従事者です。書き起こしテキストからSOAP形式のカルテを作成してください。書き起こしテキストに明示的に記載されている情報のみを使用し、推測や捏造は絶対に行わないでください。不明な情報は「情報なし」と明記してください。`;
+      const format = getKarteFormat(formatId ?? DEFAULT_KARTE_FORMAT_ID);
+      const systemPrompt = format.systemPrompt;
 
-      const finalOutputFormat = `# カルテ（SOAP形式）
-
-## 患者情報
-- 患者ID: ${patientInfo?.patientId || "（情報なし）"}
-- 氏名: ${patientInfo?.patientName || "（情報なし）"}
-- 年齢: ${patientInfo?.age || "（情報なし）"}
-- 性別: ${patientInfo?.gender || "（情報なし）"}
-
-## S（Subjective：主観的情報）
-（患者の訴え、症状、病歴など患者から得られた情報）
-
-## O（Objective：客観的情報）
-（検査結果、バイタルサイン、身体所見など客観的なデータ）
-
-## A（Assessment：評価）
-（診断、問題点の評価）
-
-## P（Plan：計画）
-（治療計画、処方、検査予定、フォローアップ計画）
-
----
-※ このカルテはAIによる自動生成です。内容の正確性については必ず医師が確認してください。`;
+      const finalOutputFormat = format.outputTemplate(patientInfo);
 
       const chunks = splitTranscriptionIntoChunks(transcription);
 
       const { result: karte, totalInputTokens, totalOutputTokens } = await summarizeChunks(
         chunks,
         systemPrompt,
-        (chunk, index, total) => {
-          if (total === 1) {
-            return `以下の書き起こしテキストからSOAP形式のカルテを作成してください。
-
-出力形式：
-${finalOutputFormat}
-
-書き起こしテキスト：
-${chunk}`;
-          }
-          return `以下は長い診察・会話の書き起こしテキストの第${index}部（全${total}部）です。この部分から医療的に重要な情報（症状、所見、治療方針等）を抽出してください。
-
-書き起こしテキスト（第${index}部/全${total}部）：
-${chunk}`;
-        },
-        (partialSummaries) => {
-          const combinedSummaries = partialSummaries
-            .map((s, i) => `【第${i + 1}部の抽出情報】\n${s}`)
-            .join("\n\n");
-          return `以下は長い診察・会話を複数のパートに分けて情報抽出したものです。これらを統合して、最終的なSOAP形式のカルテを作成してください。
-
-出力形式：
-${finalOutputFormat}
-
-各パートの抽出情報：
-${combinedSummaries}`;
-        },
+        (chunk, index, total) => format.chunkPrompt(chunk, index, total, finalOutputFormat),
+        (partialSummaries) => format.mergePrompt(partialSummaries, finalOutputFormat),
       );
 
       return {

@@ -57,6 +57,7 @@ import { saveAudio, getAudio, saveTranscriptionProgress, getTranscriptionProgres
 import { useAudioRecorder, formatDuration } from "@/hooks/useAudioRecorder";
 import { Streamdown } from "streamdown";
 import { splitAudioBlob, blobToBase64, needsSplitting } from "@/lib/audioSplitter";
+import { KARTE_FORMATS, DEFAULT_KARTE_FORMAT_ID } from "../../../../shared/karteFormats";
 
 // フロントエンドでチャンク数を推定（バックエンドと同じ8000文字単位）
 const CHUNK_SIZE = 8000;
@@ -178,6 +179,7 @@ export default function ProjectDetail() {
     age: "",
     gender: "",
   });
+  const [karteFormatId, setKarteFormatId] = useState(DEFAULT_KARTE_FORMAT_ID);
 
   // 進捗表示用 state
   const [processingProgress, setProcessingProgress] = useState<string | null>(null);
@@ -751,6 +753,7 @@ export default function ProjectDetail() {
         try {
           const result = await karteMutation.mutateAsync({
             transcription: project.transcription,
+            formatId: karteFormatId,
             patientInfo: kartePatientInfo,
           });
           clearInterval(progressInterval);
@@ -764,7 +767,8 @@ export default function ProjectDetail() {
             },
           });
           if (updated) setProject(updated);
-          toast.success(`カルテが生成されました（${result.chunkCount}チャンクを処理）`);
+          const formatName = KARTE_FORMATS.find(f => f.id === karteFormatId)?.name ?? "カルテ";
+          toast.success(`${formatName}が生成されました（${result.chunkCount}チャンクを処理）`);
         } catch (error) {
           clearInterval(progressInterval);
           throw error;
@@ -773,6 +777,7 @@ export default function ProjectDetail() {
         setProcessingProgress("カルテ生成中...");
         const result = await karteMutation.mutateAsync({
           transcription: project.transcription,
+          formatId: karteFormatId,
           patientInfo: kartePatientInfo,
         });
         setProcessingProgress(null);
@@ -785,7 +790,8 @@ export default function ProjectDetail() {
           },
         });
         if (updated) setProject(updated);
-        toast.success("カルテが生成されました");
+        const formatName = KARTE_FORMATS.find(f => f.id === karteFormatId)?.name ?? "カルテ";
+        toast.success(`${formatName}が生成されました`);
       }
     } catch (error) {
       setProcessingProgress(null);
@@ -1382,6 +1388,36 @@ export default function ProjectDetail() {
               <TabsContent value="karte" className="mt-5 space-y-4">
                 {!project.karte ? (
                   <>
+                    {/* フォーマット選択 */}
+                    <div>
+                      <Label className="text-sm font-medium">カルテフォーマット</Label>
+                      <Select value={karteFormatId} onValueChange={setKarteFormatId}>
+                        <SelectTrigger className="mt-2 glass-input rounded-xl">
+                          <SelectValue placeholder="フォーマットを選択" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(
+                            KARTE_FORMATS.reduce((acc, f) => {
+                              if (!acc[f.category]) acc[f.category] = [];
+                              acc[f.category].push(f);
+                              return acc;
+                            }, {} as Record<string, typeof KARTE_FORMATS>)
+                          ).map(([category, formats]) => (
+                            <div key={category}>
+                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{category}</div>
+                              {formats.map((f) => (
+                                <SelectItem key={f.id} value={f.id}>
+                                  <div className="flex flex-col">
+                                    <span>{f.name}</span>
+                                    <span className="text-xs text-muted-foreground">{f.description}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </div>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <Label className="text-sm font-medium">患者ID</Label>
@@ -1440,7 +1476,7 @@ export default function ProjectDetail() {
                           {processingProgress || "生成中..."}
                         </>
                       ) : (
-                        "カルテを生成（SOAP形式）"
+                        `${KARTE_FORMATS.find(f => f.id === karteFormatId)?.name ?? "カルテ"}を生成`
                       )}
                     </Button>
                   </>
