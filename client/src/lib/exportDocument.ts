@@ -1,79 +1,81 @@
 /**
  * カルテ・議事録のPDF/PNG出力ユーティリティ
  *
- * PNG: dom-to-image-more を使用
- *   - ブラウザのレンダリングエンジンを直接使用するため OKLCH / backdrop-filter / Google Fonts に完全対応
- *   - html2canvas は OKLCH 色形式・外部フォント CORS に非対応のため使用しない
+ * PNG: dom-to-image-more の onclone コールバックを使用
+ *   - クローンされたDOMに直接インラインスタイルを適用するため、外部スタイルシートの影響を受けない
+ *   - OKLCH / backdrop-filter / Google Fonts に完全対応
  *
  * PDF: ブラウザの印刷ダイアログ経由（日本語・スタイル完全対応）
  */
 import domtoimage from "dom-to-image-more";
 
 /**
- * PNG出力用のスタイルを一時的に適用して、出力後に元に戻す
- * - prose クラスの太いボーダーを細く変更
- * - backdrop-filter を無効化
- * - 背景を白に統一
+ * クローンされたDOMの全要素を走査して、枠線・背景・フィルターをインラインで上書き
  */
-function applyPngExportStyles(element: HTMLElement): () => void {
-  const styleId = "__png-export-style__";
+function cleanupClonedElement(clone: HTMLElement): void {
+  // ルート要素の背景を白に
+  clone.style.background = "#ffffff";
+  clone.style.backdropFilter = "none";
+  (clone.style as unknown as Record<string, string>)["-webkit-backdrop-filter"] = "none";
+  clone.style.boxShadow = "none";
+  clone.style.borderRadius = "0";
+  clone.style.padding = "24px";
 
-  // 既存のスタイルタグがあれば削除
-  document.getElementById(styleId)?.remove();
+  // 全子孫要素を走査
+  const allElements = clone.querySelectorAll("*");
+  allElements.forEach((el) => {
+    const elem = el as HTMLElement;
+    const tag = elem.tagName.toLowerCase();
+    const computed = window.getComputedStyle(elem);
 
-  const style = document.createElement("style");
-  style.id = styleId;
-  style.textContent = `
-    /* PNG出力用一時スタイル */
-    [data-png-export] * {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-    }
-    [data-png-export] table,
-    [data-png-export] th,
-    [data-png-export] td {
-      border: 1px solid #d1d5db !important;
-      border-collapse: collapse !important;
-    }
-    [data-png-export] hr {
-      border: none !important;
-      border-top: 1px solid #e5e7eb !important;
-    }
-    [data-png-export] blockquote {
-      border-left: 3px solid #d1d5db !important;
-    }
-    [data-png-export] h1,
-    [data-png-export] h2,
-    [data-png-export] h3 {
-      border-bottom: 1px solid #e5e7eb !important;
-      padding-bottom: 4px !important;
-    }
-    [data-png-export] pre,
-    [data-png-export] code {
-      border: 1px solid #e5e7eb !important;
-    }
-    /* prose クラスのデフォルト太枠を上書き */
-    [data-png-export] .prose table {
-      border: 1px solid #d1d5db !important;
-    }
-    [data-png-export] .prose thead th {
-      border: 1px solid #d1d5db !important;
-      background-color: #f9fafb !important;
-    }
-    [data-png-export] .prose tbody td {
-      border: 1px solid #e5e7eb !important;
-    }
-  `;
-  document.head.appendChild(style);
+    // backdrop-filter を無効化
+    elem.style.backdropFilter = "none";
+    (elem.style as unknown as Record<string, string>)["-webkit-backdrop-filter"] = "none";
 
-  // 対象要素にdata属性を付与
-  element.setAttribute("data-png-export", "true");
+    // Google Fonts の link タグを削除
+    if (tag === "link") {
+      const href = elem.getAttribute("href") || "";
+      if (href.includes("fonts.googleapis.com") || href.includes("fonts.gstatic.com")) {
+        elem.remove();
+        return;
+      }
+    }
 
-  // 元のスタイルを保存して返す（クリーンアップ関数）
-  return () => {
-    element.removeAttribute("data-png-export");
-    document.getElementById(styleId)?.remove();
-  };
+    // 背景の透明度を除去（bg-white/30 などの半透明背景を白に）
+    const bg = computed.backgroundColor;
+    if (bg && bg.includes("rgba")) {
+      elem.style.background = "#ffffff";
+      elem.style.backgroundColor = "#ffffff";
+    }
+
+    // 枠線を細く統一
+    const borderWidth = parseFloat(computed.borderWidth || "0");
+    if (borderWidth > 1) {
+      elem.style.border = "1px solid #e5e7eb";
+    }
+
+    // table / th / td の枠線を細く
+    if (tag === "table" || tag === "th" || tag === "td") {
+      elem.style.border = "1px solid #d1d5db";
+      elem.style.borderCollapse = "collapse";
+    }
+
+    // h1/h2/h3 の下線を細く
+    if (tag === "h1" || tag === "h2" || tag === "h3") {
+      const borderBottomWidth = parseFloat(computed.borderBottomWidth || "0");
+      if (borderBottomWidth > 1) {
+        elem.style.borderBottom = "1px solid #e5e7eb";
+      }
+    }
+
+    // blockquote の左線を細く
+    if (tag === "blockquote") {
+      elem.style.borderLeft = "3px solid #d1d5db";
+    }
+
+    // box-shadow を除去
+    elem.style.boxShadow = "none";
+  });
 }
 
 /**
@@ -84,22 +86,17 @@ export async function downloadAsPng(element: HTMLElement, filename: string): Pro
   const scrollTop = element.scrollTop;
   element.scrollTop = 0;
 
-  // PNG出力用スタイルを一時適用
-  const cleanup = applyPngExportStyles(element);
-
-  // スタイル適用後に少し待つ（レンダリング反映）
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
   try {
     const dataUrl = await domtoimage.toPng(element, {
       quality: 1,
       scale: 2,
       bgcolor: "#ffffff",
       // 外部フォント（Google Fonts等）のCSSルール読み取りをスキップしてCORSエラーを回避
-      // フォントはブラウザキャッシュから描画されるため見た目への影響はない
       disableEmbedFonts: true,
-      // クロスオリジンリソースのキャッシュバスト
-      cacheBust: true,
+      // クローンされたDOMを直接書き換えて枠線・背景を修正
+      onclone: (clone: HTMLElement) => {
+        cleanupClonedElement(clone);
+      },
     });
 
     const link = document.createElement("a");
@@ -109,7 +106,6 @@ export async function downloadAsPng(element: HTMLElement, filename: string): Pro
     link.click();
     document.body.removeChild(link);
   } finally {
-    cleanup();
     element.scrollTop = scrollTop;
   }
 }

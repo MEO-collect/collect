@@ -11,6 +11,8 @@ declare module "dom-to-image-more" {
     cacheBust?: boolean;
     disableEmbedFonts?: boolean;
     disableInlineImages?: boolean;
+    onclone?: (clone: HTMLElement) => void | Promise<void>;
+    adjustClonedNode?: (original: Node, clone: Node, after: boolean) => void;
   }
 
   function toPng(node: HTMLElement, options?: Options): Promise<string>;
