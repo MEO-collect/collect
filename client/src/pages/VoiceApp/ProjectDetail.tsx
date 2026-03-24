@@ -203,6 +203,9 @@ export default function ProjectDetail() {
   // 進捗表示用 state
   const [processingProgress, setProcessingProgress] = useState<string | null>(null);
 
+  // タブ制御（自動生成後に該当タブへ切り替えるため）
+  const [activeTab, setActiveTab] = useState<"summary" | "minutes" | "karte">("summary");
+
   // チャンク書き起こし再開確認ダイアログ用 state
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [pendingProgress, setPendingProgress] = useState<TranscriptionProgress | null>(null);
@@ -558,7 +561,16 @@ export default function ProjectDetail() {
           setEditedTranscription(fullTranscription);
         }
         const resumeMsg = resumedFrom > 0 ? `（チャンク${resumedFrom + 1}から再開）` : "";
-        toast.success(`書き起こしが完了しました（${totalChunks}チャンク${resumeMsg}）`);
+        // 録音前設定があれば自動生成を実行
+        if (project?.preRecordSettings?.mode) {
+          toast.success(`書き起こしが完了しました（${totalChunks}チャンク${resumeMsg}）。自動生成を開始します...`);
+          const latestProject = getProject(projectId!);
+          if (latestProject) {
+            await autoGenerateAfterTranscription(fullTranscription, project.preRecordSettings, latestProject);
+          }
+        } else {
+          toast.success(`書き起こしが完了しました（${totalChunks}チャンク${resumeMsg}）`);
+        }
         return;
       }
 
@@ -593,7 +605,16 @@ export default function ProjectDetail() {
         setProject(updated);
         setEditedTranscription(result.transcription);
       }
-      toast.success("書き起こしが完了しました");
+      // 録音前設定があれば自動生成を実行
+      if (project?.preRecordSettings?.mode) {
+        toast.success("書き起こしが完了しました。自動生成を開始します...");
+        const latestProject = getProject(projectId!);
+        if (latestProject) {
+          await autoGenerateAfterTranscription(result.transcription, project.preRecordSettings, latestProject);
+        }
+      } else {
+        toast.success("書き起こしが完了しました");
+      }
     } catch (error) {
       setProcessingProgress(null);
       console.error("Transcription error:", error);
@@ -703,6 +724,129 @@ export default function ProjectDetail() {
           </button>
         </div>
       );
+    }
+  };
+
+  // 書き起こし完了後に録音前設定に基づいて自動生成を実行するヘルパー
+  const autoGenerateAfterTranscription = async (
+    transcription: string,
+    settings: PreRecordSettings,
+    currentProject: Project,
+  ) => {
+    if (!settings.mode) return;
+
+    if (settings.mode === "minutes") {
+      // 議事録を自動生成
+      const chunkCount = estimateChunkCount(transcription);
+      const template = settings.minutesTemplate ?? "business";
+      const metadata = {
+        meetingName: settings.meetingName ?? "",
+        date: settings.meetingDate ?? "",
+        participants: settings.participants ?? "",
+        location: "",
+      };
+      try {
+        if (chunkCount > 1) {
+          let currentChunk = 1;
+          const progressInterval = setInterval(() => {
+            if (currentChunk < chunkCount) {
+              currentChunk++;
+              setProcessingProgress(`書き起こし完了 → 議事録を自動生成中... (チャンク${currentChunk}/${chunkCount})`);
+            } else {
+              setProcessingProgress(`書き起こし完了 → 議事録を自動生成中... (最終統合処理中)`);
+              clearInterval(progressInterval);
+            }
+          }, 25000);
+          setProcessingProgress(`書き起こし完了 → 議事録を自動生成中... (チャンク1/${chunkCount})`);
+          try {
+            const result = await minutesMutation.mutateAsync({ transcription, template, metadata });
+            clearInterval(progressInterval);
+            setProcessingProgress(null);
+            const updated = updateProject(projectId!, {
+              minutes: result.minutes,
+              tokenUsage: { ...currentProject.tokenUsage, minutes: result.tokenUsage },
+            });
+            if (updated) setProject(updated);
+            setActiveTab("minutes");
+            toast.success(`議事録が自動生成されました（${result.chunkCount}チャンクを処理）`);
+          } catch (err) {
+            clearInterval(progressInterval);
+            throw err;
+          }
+        } else {
+          setProcessingProgress("書き起こし完了 → 議事録を自動生成中...");
+          const result = await minutesMutation.mutateAsync({ transcription, template, metadata });
+          setProcessingProgress(null);
+          const updated = updateProject(projectId!, {
+            minutes: result.minutes,
+            tokenUsage: { ...currentProject.tokenUsage, minutes: result.tokenUsage },
+          });
+          if (updated) setProject(updated);
+          setActiveTab("minutes");
+          toast.success("議事録が自動生成されました");
+        }
+      } catch (error) {
+        setProcessingProgress(null);
+        console.error("Auto minutes error:", error);
+        toast.error("議事録の自動生成に失敗しました。タブから手動で生成してください。");
+      }
+    } else if (settings.mode === "karte") {
+      // カルテを自動生成
+      const chunkCount = estimateChunkCount(transcription);
+      const formatId = settings.karteFormatId ?? DEFAULT_KARTE_FORMAT_ID;
+      const patientInfo = {
+        patientId: "",
+        patientName: settings.patientName ?? "",
+        age: settings.patientAge ?? "",
+        gender: settings.patientGender ?? "",
+      };
+      try {
+        if (chunkCount > 1) {
+          let currentChunk = 1;
+          const progressInterval = setInterval(() => {
+            if (currentChunk < chunkCount) {
+              currentChunk++;
+              setProcessingProgress(`書き起こし完了 → カルテを自動生成中... (チャンク${currentChunk}/${chunkCount})`);
+            } else {
+              setProcessingProgress(`書き起こし完了 → カルテを自動生成中... (最終統合処理中)`);
+              clearInterval(progressInterval);
+            }
+          }, 25000);
+          setProcessingProgress(`書き起こし完了 → カルテを自動生成中... (チャンク1/${chunkCount})`);
+          try {
+            const result = await karteMutation.mutateAsync({ transcription, formatId, patientInfo });
+            clearInterval(progressInterval);
+            setProcessingProgress(null);
+            const updated = updateProject(projectId!, {
+              karte: result.karte,
+              tokenUsage: { ...currentProject.tokenUsage, karte: result.tokenUsage },
+            });
+            if (updated) setProject(updated);
+            setActiveTab("karte");
+            const formatName = KARTE_FORMATS.find(f => f.id === formatId)?.name ?? "カルテ";
+            toast.success(`${formatName}が自動生成されました（${result.chunkCount}チャンクを処理）`);
+          } catch (err) {
+            clearInterval(progressInterval);
+            throw err;
+          }
+        } else {
+          setProcessingProgress("書き起こし完了 → カルテを自動生成中...");
+          const result = await karteMutation.mutateAsync({ transcription, formatId, patientInfo });
+          setProcessingProgress(null);
+          const updated = updateProject(projectId!, {
+            karte: result.karte,
+            tokenUsage: { ...currentProject.tokenUsage, karte: result.tokenUsage },
+          });
+          if (updated) setProject(updated);
+          setActiveTab("karte");
+          const formatName = KARTE_FORMATS.find(f => f.id === formatId)?.name ?? "カルテ";
+          toast.success(`${formatName}が自動生成されました`);
+        }
+      } catch (error) {
+        setProcessingProgress(null);
+        console.error("Auto karte error:", error);
+        toast.error("カルテの自動生成に失敗しました。タブから手動で生成してください。");
+      }
     }
   };
 
@@ -1482,7 +1626,7 @@ export default function ProjectDetail() {
         {/* 要約/議事録/カルテ タブ */}
         {project.transcription && (
           <div className="glass-card p-6">
-            <Tabs defaultValue="summary">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "summary" | "minutes" | "karte")}>
               <TabsList className="grid w-full grid-cols-3 bg-white/30 backdrop-blur-sm rounded-xl p-1">
                 <TabsTrigger value="summary" className="rounded-lg data-[state=active]:bg-white/70">要約</TabsTrigger>
                 <TabsTrigger value="minutes" className="rounded-lg data-[state=active]:bg-white/70">議事録</TabsTrigger>
