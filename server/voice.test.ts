@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitTranscriptionIntoChunks, removeHallucinationLoop } from "./routers/voice";
+import { splitTranscriptionIntoChunks, removeHallucinationLoop, fixUncheckedOtherCheckboxes } from "./routers/voice";
 
 describe("splitTranscriptionIntoChunks", () => {
   it("should return single chunk for short text", () => {
@@ -163,5 +163,39 @@ describe("removeHallucinationLoop", () => {
     // 50行から大幅に削減されていること
     const resultLines = cleaned.split("\n").filter(l => l.trim());
     expect(resultLines.length).toBeLessThan(20);
+  });
+});
+
+describe("fixUncheckedOtherCheckboxes", () => {
+  it("should check ☐ when brackets contain content", () => {
+    const text = "☐ その他（肩こり、腰痛）";
+    expect(fixUncheckedOtherCheckboxes(text)).toBe("☑ その他（肩こり、腰痛）");
+  });
+
+  it("should not check ☐ when brackets are empty (spaces only)", () => {
+    const text = "☐ その他（　　　　　）";
+    expect(fixUncheckedOtherCheckboxes(text)).toBe("☐ その他（　　　　　）");
+  });
+
+  it("should not change already checked ☑", () => {
+    const text = "☑ その他（肩こり）";
+    expect(fixUncheckedOtherCheckboxes(text)).toBe("☑ その他（肩こり）");
+  });
+
+  it("should handle multiple checkboxes in one text", () => {
+    const text = "☐ 痛い　☐ しびれる　☐ その他（だるさ）";
+    const result = fixUncheckedOtherCheckboxes(text);
+    expect(result).toContain("☑ その他（だるさ）");
+    // 内容のないチェックボックスはそのまま
+    expect(result).toContain("☐ 痛い");
+  });
+
+  it("should handle real-world karte pattern", () => {
+    const text = "☐ あり（整形外科、整骨院）";
+    expect(fixUncheckedOtherCheckboxes(text)).toBe("☑ あり（整形外科、整骨院）");
+  });
+
+  it("should handle empty string", () => {
+    expect(fixUncheckedOtherCheckboxes("")).toBe("");
   });
 });

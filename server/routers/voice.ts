@@ -119,7 +119,30 @@ export function removeHallucinationLoop(
   return { cleaned, hadLoop };
 }
 
-// 約100分の会話に相当するトークン数（日本語1文字≒1.5トークン、100分≒15000文字）
+/**
+ * 「その他（内容）」のように括弧内に内容が記載されているのに☐のままのチェックボックスを自動修正する
+ *
+ * 例: ☐ その他（肩こり、腰痛） → ☑ その他（肩こり、腰痛）
+ * 例: ☐ その他（　　　） → 変更なし（内容が空白のみなので☐のまま）
+ */
+export function fixUncheckedOtherCheckboxes(text: string): string {
+  if (!text) return text;
+  // ☐ の後に空白以外の内容が括弧内にある場合は☑に置換
+  // パターン: ☐ 任意のテキスト（　　　以外の内容）
+  // パターン: ☐ 任意のテキスト（内容） — 全角括弧内に空白以外の内容があれば☑に置換
+  // 注意: 括弧内のテキストは「）」までの最短マッチにする（複数チェックボックスが同一行にある場合の誤検知を防ぐ）
+  return text.replace(
+    /☐([^（）☐☑\n]*（)([^）]*?)）/g,
+    (_match, prefix, content) => {
+      // 内容が全角・半角スペース・空白・線のみの場合は空白とみなして☐のまま
+      const trimmed = content.replace(/[　\s―ー＿]/g, "");
+      if (!trimmed) return `☐${prefix}${content}）`;
+      return `☑${prefix}${content}）`;
+    }
+  );
+}
+
+// 約100分の会話に相当するトークン数（日本語1文字≈1.5トークン、100分≠15000文字）
 // 安全マージンを取り、8000文字ごとに分割
 const CHUNK_SIZE = 8000;
 
@@ -643,12 +666,15 @@ ${combinedSummaries}`;
 
       const chunks = splitTranscriptionIntoChunks(transcription);
 
-      const { result: karte, totalInputTokens, totalOutputTokens } = await summarizeChunks(
+      const { result: rawKarte, totalInputTokens, totalOutputTokens } = await summarizeChunks(
         chunks,
         systemPrompt,
         (chunk, index, total) => format.chunkPrompt(chunk, index, total, finalOutputFormat),
         (partialSummaries) => format.mergePrompt(partialSummaries, finalOutputFormat),
       );
+
+      // 「その他（内容）」のように括弧内に内容があるのに☐のままのチェックボックスを自動修正
+      const karte = fixUncheckedOtherCheckboxes(rawKarte);
 
       return {
         karte,
