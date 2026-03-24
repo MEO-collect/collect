@@ -1492,7 +1492,7 @@ export default function ProjectDetail() {
                   </>
                 ) : (
                   <div className="space-y-4">
-                    <div ref={karteRef} className="prose prose-sm max-w-none p-4 rounded-xl bg-white/30 backdrop-blur-sm">
+                    <div ref={karteRef} className="karte-export-root prose prose-sm max-w-none p-4 bg-white rounded-xl">
                       <Streamdown>{project.karte}</Streamdown>
                     </div>
                     <div className="flex flex-wrap gap-2">

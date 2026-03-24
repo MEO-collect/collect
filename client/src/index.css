@@ -386,3 +386,204 @@
   50% { width: 70%; }
   100% { width: 100%; }
 }
+
+/* ─── カルテ表示・書き出し共通スタイル ─── */
+
+/* 画面表示用：各セクション（h2）を区切り線で分離 */
+.karte-export-root {
+  background: #ffffff;
+  color: #1a1a1a;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
+  line-height: 1.7;
+}
+
+/* h1（カルテタイトル）*/
+.karte-export-root h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  border-bottom: 2px solid #374151;
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+  margin-top: 0;
+}
+
+/* h2（大セクション）：上に区切り線 */
+.karte-export-root h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  border-bottom: 1.5px solid #93c5fd;
+  padding-bottom: 0.25rem;
+  margin-top: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+/* h3（小セクション）：左ボーダー */
+.karte-export-root h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  border-left: 3px solid #93c5fd;
+  padding-left: 0.5rem;
+  margin-top: 0.8rem;
+  margin-bottom: 0.3rem;
+}
+
+/* 段落・リストの余白を詰める */
+.karte-export-root p {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.karte-export-root ul,
+.karte-export-root ol {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+  padding-left: 1.2rem;
+}
+
+.karte-export-root li {
+  margin-top: 0.1rem;
+  margin-bottom: 0.1rem;
+}
+
+/* 強調テキスト */
+.karte-export-root strong {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+/* テーブル */
+.karte-export-root table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.karte-export-root th {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.karte-export-root td {
+  border: 1px solid #cbd5e1;
+  padding: 0.3rem 0.5rem;
+}
+
+/* hr（水平線）*/
+.karte-export-root hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 0.8rem 0;
+}
+
+/* blockquote（注意書き等）*/
+.karte-export-root blockquote {
+  border-left: 3px solid #fbbf24;
+  background: #fffbeb;
+  padding: 0.4rem 0.75rem;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  color: #92400e;
+}
+
+/* ─── PNG/PDF書き出し専用スタイル ─── */
+
+/* A4比率コンテナ（210:297 ≒ 1:1.414） */
+.karte-print-wrapper {
+  width: 794px;          /* 96dpi × 210mm ≈ 794px */
+  min-height: 1123px;    /* 96dpi × 297mm ≈ 1123px */
+  padding: 48px 56px;
+  background: #ffffff;
+  color: #1a1a1a;
+  box-sizing: border-box;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* 書き出し時：枠線なし・区切り線のみ */
+.karte-print-wrapper h1 {
+  font-size: 16px;
+  font-weight: 700;
+  border-bottom: 2px solid #374151;
+  padding-bottom: 6px;
+  margin-bottom: 16px;
+  margin-top: 0;
+}
+
+.karte-print-wrapper h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e3a5f;
+  border-bottom: 1.5px solid #93c5fd;
+  padding-bottom: 3px;
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+.karte-print-wrapper h3 {
+  font-size: 13px;
+  font-weight: 600;
+  border-left: 3px solid #93c5fd;
+  padding-left: 8px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.karte-print-wrapper p {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.karte-print-wrapper ul,
+.karte-print-wrapper ol {
+  margin-top: 2px;
+  margin-bottom: 2px;
+  padding-left: 18px;
+}
+
+.karte-print-wrapper li {
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
+
+.karte-print-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.karte-print-wrapper th {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 4px 8px;
+  text-align: left;
+  font-weight: 600;
+}
+
+.karte-print-wrapper td {
+  border: 1px solid #cbd5e1;
+  padding: 3px 8px;
+}
+
+.karte-print-wrapper hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 10px 0;
+}
+
+/* 注意書き（最終行）*/
+.karte-print-wrapper .karte-footer-note {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 11px;
+  color: #6b7280;
+}
