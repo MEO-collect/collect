@@ -5,6 +5,120 @@ import { getKarteFormat, DEFAULT_KARTE_FORMAT_ID } from "../../shared/karteForma
 
 const SPEAKER_LABELS = ["話者1", "話者2", "話者3", "話者4"];
 
+/**
+ * 書き起こし結果のハルシネーションループを検出・除去する
+ *
+ * Whisper系モデルは無音・低品質音声で同じ短いフレーズを
+ * 何十回も繰り返す「ハルシネーションループ」を起こすことがある。
+ * このユーティリティは連続する重複セグメントを検出して除去する。
+ *
+ * アルゴリズム:
+ * 1. 行ごとに分割
+ * 2. 連続する同一テキスト（話者ラベルを除いた発言内容）が
+ *    MAX_REPEAT回以上続いたら、最初の1回だけ残して後続を削除
+ * 3. 削除した場合は末尾に注記を追加
+ */
+export function removeHallucinationLoop(
+  text: string,
+  maxRepeat: number = 3,
+): { cleaned: string; hadLoop: boolean } {
+  if (!text) return { cleaned: text, hadLoop: false };
+
+  const lines = text.split("\n");
+  const result: string[] = [];
+  let hadLoop = false;
+
+  // 直近のN行の「発言内容」（話者ラベルを除いた部分）を追跡
+  const recentContents: string[] = [];
+  let consecutiveCount = 0;
+  let lastContent = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      result.push(line);
+      continue;
+    }
+
+    // 話者ラベルを除いた発言内容を抽出
+    const speakerMatch = trimmed.match(/^\[([^\]]+)\]:\s*(.*)$/);
+    const content = speakerMatch ? speakerMatch[2].trim() : trimmed;
+
+    // 空の発言はスキップしない
+    if (!content) {
+      result.push(line);
+      continue;
+    }
+
+    // 直前と同じ内容かチェック
+    if (content === lastContent) {
+      consecutiveCount++;
+      if (consecutiveCount >= maxRepeat) {
+        // maxRepeat回以上連続したらスキップ
+        hadLoop = true;
+        continue;
+      }
+    } else {
+      consecutiveCount = 1;
+      lastContent = content;
+    }
+
+    result.push(line);
+    recentContents.push(content);
+  }
+
+  // さらにN-gram単位でのループも検出（例：「ああ、はい。」「ああ、はい。」が交互に繰り返す場合）
+  // 最終的な行リストに対してウィンドウスライドで重複ブロックを検出
+  const finalLines = result;
+  const dedupedLines: string[] = [];
+  let i = 0;
+
+  while (i < finalLines.length) {
+    const line = finalLines[i];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      dedupedLines.push(line);
+      i++;
+      continue;
+    }
+
+    // 現在行から始まるパターンが直後に繰り返されるか確認（パターン長1〜5行）
+    let foundRepeat = false;
+    for (let patLen = 1; patLen <= 5 && i + patLen * 2 <= finalLines.length; patLen++) {
+      const pattern = finalLines.slice(i, i + patLen).map(l => l.trim()).join("|");
+      let repeatCount = 0;
+      let j = i + patLen;
+      while (j + patLen <= finalLines.length) {
+        const next = finalLines.slice(j, j + patLen).map(l => l.trim()).join("|");
+        if (next === pattern) {
+          repeatCount++;
+          j += patLen;
+        } else {
+          break;
+        }
+      }
+      if (repeatCount >= 2) {
+        // パターンが3回以上繰り返されたら最初の1回だけ残す
+        for (let k = 0; k < patLen; k++) {
+          dedupedLines.push(finalLines[i + k]);
+        }
+        i = j; // 繰り返し部分をスキップ
+        hadLoop = true;
+        foundRepeat = true;
+        break;
+      }
+    }
+
+    if (!foundRepeat) {
+      dedupedLines.push(line);
+      i++;
+    }
+  }
+
+  const cleaned = dedupedLines.join("\n");
+  return { cleaned, hadLoop };
+}
+
 // 約100分の会話に相当するトークン数（日本語1文字≒1.5トークン、100分≒15000文字）
 // 安全マージンを取り、8000文字ごとに分割
 const CHUNK_SIZE = 8000;
@@ -171,11 +285,16 @@ export const voiceRouter = router({
       });
 
       const content = response.choices[0]?.message?.content;
-      const transcription = typeof content === "string" ? content : "";
+      const rawTranscription = typeof content === "string" ? content : "";
+      const { cleaned: transcription, hadLoop } = removeHallucinationLoop(rawTranscription);
+      if (hadLoop) {
+        console.warn("[transcribe] Hallucination loop detected and removed from transcription");
+      }
       const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
       return {
         transcription,
+        hadLoop,
         tokenUsage: {
           input: usage.prompt_tokens,
           output: usage.completion_tokens,
@@ -246,11 +365,16 @@ export const voiceRouter = router({
       });
 
       const content = response.choices[0]?.message?.content;
-      const transcription = typeof content === "string" ? content : "";
+      const rawTranscription = typeof content === "string" ? content : "";
+      const { cleaned: transcription, hadLoop } = removeHallucinationLoop(rawTranscription);
+      if (hadLoop) {
+        console.warn(`[transcribeChunk] Hallucination loop detected in chunk ${chunkIndex + 1}/${totalChunks} and removed`);
+      }
       const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
       return {
         transcription,
+        hadLoop,
         tokenUsage: {
           input: usage.prompt_tokens,
           output: usage.completion_tokens,

@@ -456,6 +456,9 @@ export default function ProjectDetail() {
           });
 
           // チャンク結果を追加
+          if (result.hadLoop) {
+            toast.warning(`チャンク${chunk.index + 1}で繰り返しパターンを検出・除去しました（音声品質により発生する場合があります）`, { duration: 5000 });
+          }
           completedChunks.push({
             index: chunk.index,
             startSec: chunk.startSec,
@@ -526,6 +529,9 @@ export default function ProjectDetail() {
 
       setProcessingProgress(null);
 
+      if (result.hadLoop) {
+        toast.warning("繰り返しパターンを検出・除去しました（音声品質により発生する場合があります）", { duration: 5000 });
+      }
       const updated = updateProject(projectId!, {
         transcription: result.transcription,
         status: "transcribed",
