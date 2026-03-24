@@ -11,6 +11,22 @@ export interface TokenUsage {
   karte?: { input: number; output: number };
 }
 
+export type PreRecordMode = "minutes" | "karte" | null;
+
+export interface PreRecordSettings {
+  mode: PreRecordMode;
+  // 議事録設定
+  minutesTemplate: "business" | "medical" | "weekly";
+  meetingName: string;
+  meetingDate: string;
+  participants: string;
+  // カルテ設定
+  karteFormatId: string;
+  patientName: string;
+  patientAge: string;
+  patientGender: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -24,6 +40,7 @@ export interface Project {
   karte: string | null;
   tokenUsage: TokenUsage;
   speakerCount: number | null; // null means auto
+  preRecordSettings?: PreRecordSettings;
 }
 
 const STORAGE_KEY = "btob-ai-projects";

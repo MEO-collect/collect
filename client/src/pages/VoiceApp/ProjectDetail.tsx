@@ -25,6 +25,7 @@ import {
   ArrowLeft, 
   Check,
   Clipboard, 
+  ClipboardList,
   Download, 
   Edit3, 
   Eye,
@@ -34,7 +35,9 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Settings2,
   Square,
+  Stethoscope,
   Users,
   Coins,
   AlertTriangle,
@@ -50,6 +53,8 @@ import {
   getProject, 
   updateProject, 
   Project,
+  PreRecordSettings,
+  PreRecordMode,
   calculateTokenCost,
   getTotalTokens
 } from "@/lib/projectStorage";
@@ -181,6 +186,20 @@ export default function ProjectDetail() {
   });
   const [karteFormatId, setKarteFormatId] = useState(DEFAULT_KARTE_FORMAT_ID);
 
+  // 録音前設定パネル
+  const [preRecordMode, setPreRecordMode] = useState<PreRecordMode>(null);
+  const [preRecordSettings, setPreRecordSettings] = useState<PreRecordSettings>({
+    mode: null,
+    minutesTemplate: "business",
+    meetingName: "",
+    meetingDate: "",
+    participants: "",
+    karteFormatId: DEFAULT_KARTE_FORMAT_ID,
+    patientName: "",
+    patientAge: "",
+    patientGender: "",
+  });
+
   // 進捗表示用 state
   const [processingProgress, setProcessingProgress] = useState<string | null>(null);
 
@@ -262,6 +281,35 @@ export default function ProjectDetail() {
         setProject(p);
         setEditedTranscription(p.transcription || "");
         setSpeakerCount(p.speakerCount?.toString() || "auto");
+        // 録音前設定を復元
+        if (p.preRecordSettings) {
+          setPreRecordMode(p.preRecordSettings.mode);
+          setPreRecordSettings(p.preRecordSettings);
+          // 議事録設定を復元
+          if (p.preRecordSettings.minutesTemplate) {
+            setMinutesTemplate(p.preRecordSettings.minutesTemplate);
+          }
+          if (p.preRecordSettings.meetingName || p.preRecordSettings.meetingDate || p.preRecordSettings.participants) {
+            setMinutesMetadata(prev => ({
+              ...prev,
+              meetingName: p.preRecordSettings!.meetingName,
+              date: p.preRecordSettings!.meetingDate,
+              participants: p.preRecordSettings!.participants,
+            }));
+          }
+          // カルテ設定を復元
+          if (p.preRecordSettings.karteFormatId) {
+            setKarteFormatId(p.preRecordSettings.karteFormatId);
+          }
+          if (p.preRecordSettings.patientName || p.preRecordSettings.patientAge || p.preRecordSettings.patientGender) {
+            setKartePatientInfo(prev => ({
+              ...prev,
+              patientName: p.preRecordSettings!.patientName,
+              age: p.preRecordSettings!.patientAge,
+              gender: p.preRecordSettings!.patientGender,
+            }));
+          }
+        }
       }
     }
   }, [projectId]);
@@ -1034,13 +1082,252 @@ export default function ProjectDetail() {
                   録音し直す
                 </Button>
               </div>
+              {/* 録音前設定のサマリー表示 */}
+              {project.preRecordSettings?.mode && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    {project.preRecordSettings.mode === "minutes" ? (
+                      <><ClipboardList className="h-3 w-3" />議事録</>
+                    ) : (
+                      <><Stethoscope className="h-3 w-3" />カルテ</>
+                    )}
+                  </Badge>
+                  {project.preRecordSettings.mode === "minutes" && project.preRecordSettings.meetingName && (
+                    <Badge variant="outline" className="text-xs">{project.preRecordSettings.meetingName}</Badge>
+                  )}
+                  {project.preRecordSettings.mode === "minutes" && project.preRecordSettings.participants && (
+                    <Badge variant="outline" className="text-xs gap-1"><Users className="h-3 w-3" />{project.preRecordSettings.participants}</Badge>
+                  )}
+                  {project.preRecordSettings.mode === "karte" && project.preRecordSettings.patientName && (
+                    <Badge variant="outline" className="text-xs">{project.preRecordSettings.patientName}</Badge>
+                  )}
+                  {project.preRecordSettings.mode === "karte" && (project.preRecordSettings.patientAge || project.preRecordSettings.patientGender) && (
+                    <Badge variant="outline" className="text-xs">
+                      {project.preRecordSettings.patientAge && `${project.preRecordSettings.patientAge}歳`}
+                      {project.preRecordSettings.patientAge && project.preRecordSettings.patientGender && " / "}
+                      {project.preRecordSettings.patientGender === "male" ? "男性" : project.preRecordSettings.patientGender === "female" ? "女性" : project.preRecordSettings.patientGender === "other" ? "その他" : ""}
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <Button onClick={startRecording} size="lg" className="btn-gradient text-white border-0 px-8 py-6 rounded-xl">
-                <Mic className="h-5 w-5 mr-2" />
-                録音を開始
-              </Button>
+            <div className="space-y-5">
+              {/* 録音前設定パネル */}
+              <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Settings2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">録音後に作成するドキュメント（任意）</span>
+                </div>
+
+                {/* モード選択 */}
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => {
+                      const newMode = preRecordMode === "minutes" ? null : "minutes";
+                      setPreRecordMode(newMode);
+                      setPreRecordSettings(prev => ({ ...prev, mode: newMode }));
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border text-sm font-medium transition-all ${
+                      preRecordMode === "minutes"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    議事録
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newMode = preRecordMode === "karte" ? null : "karte";
+                      setPreRecordMode(newMode);
+                      setPreRecordSettings(prev => ({ ...prev, mode: newMode }));
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border text-sm font-medium transition-all ${
+                      preRecordMode === "karte"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    <Stethoscope className="h-4 w-4" />
+                    カルテ
+                  </button>
+                </div>
+
+                {/* 議事録設定 */}
+                {preRecordMode === "minutes" && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">テンプレート</Label>
+                      <Select
+                        value={preRecordSettings.minutesTemplate}
+                        onValueChange={(v) => {
+                          const val = v as "business" | "medical" | "weekly";
+                          setPreRecordSettings(prev => ({ ...prev, minutesTemplate: val }));
+                          setMinutesTemplate(val);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 text-sm rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="business">一般ビジネス会議</SelectItem>
+                          <SelectItem value="medical">医療・ケア会議</SelectItem>
+                          <SelectItem value="weekly">週次ミーティング</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">会議名</Label>
+                      <Input
+                        value={preRecordSettings.meetingName}
+                        onChange={(e) => {
+                          setPreRecordSettings(prev => ({ ...prev, meetingName: e.target.value }));
+                          setMinutesMetadata(prev => ({ ...prev, meetingName: e.target.value }));
+                        }}
+                        placeholder="例：月次全体会議"
+                        className="h-9 text-sm rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">日時</Label>
+                      <Input
+                        type="datetime-local"
+                        value={preRecordSettings.meetingDate}
+                        onChange={(e) => {
+                          setPreRecordSettings(prev => ({ ...prev, meetingDate: e.target.value }));
+                          setMinutesMetadata(prev => ({ ...prev, date: e.target.value }));
+                        }}
+                        className="h-9 text-sm rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">参加者</Label>
+                      <Input
+                        value={preRecordSettings.participants}
+                        onChange={(e) => {
+                          setPreRecordSettings(prev => ({ ...prev, participants: e.target.value }));
+                          setMinutesMetadata(prev => ({ ...prev, participants: e.target.value }));
+                        }}
+                        placeholder="例：山田、田中、佐藤"
+                        className="h-9 text-sm rounded-lg"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full rounded-lg text-xs"
+                      onClick={() => {
+                        const settings = { ...preRecordSettings, mode: preRecordMode };
+                        const updated = updateProject(projectId!, { preRecordSettings: settings });
+                        if (updated) setProject(updated);
+                        toast.success("議事録設定を保存しました");
+                      }}
+                    >
+                      <Check className="h-3 w-3 mr-1" />
+                      設定を保存
+                    </Button>
+                  </div>
+                )}
+
+                {/* カルテ設定 */}
+                {preRecordMode === "karte" && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">フォーマット</Label>
+                      <Select
+                        value={preRecordSettings.karteFormatId}
+                        onValueChange={(v) => {
+                          setPreRecordSettings(prev => ({ ...prev, karteFormatId: v }));
+                          setKarteFormatId(v);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 text-sm rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {KARTE_FORMATS.map(f => (
+                            <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">患者名</Label>
+                      <Input
+                        value={preRecordSettings.patientName}
+                        onChange={(e) => {
+                          setPreRecordSettings(prev => ({ ...prev, patientName: e.target.value }));
+                          setKartePatientInfo(prev => ({ ...prev, patientName: e.target.value }));
+                        }}
+                        placeholder="例：山田 太郎"
+                        className="h-9 text-sm rounded-lg"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">年齢</Label>
+                        <Input
+                          value={preRecordSettings.patientAge}
+                          onChange={(e) => {
+                            setPreRecordSettings(prev => ({ ...prev, patientAge: e.target.value }));
+                            setKartePatientInfo(prev => ({ ...prev, age: e.target.value }));
+                          }}
+                          placeholder="例：45"
+                          className="h-9 text-sm rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">性別</Label>
+                        <Select
+                          value={preRecordSettings.patientGender}
+                          onValueChange={(v) => {
+                            setPreRecordSettings(prev => ({ ...prev, patientGender: v }));
+                            setKartePatientInfo(prev => ({ ...prev, gender: v }));
+                          }}
+                        >
+                          <SelectTrigger className="h-9 text-sm rounded-lg">
+                            <SelectValue placeholder="選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">男性</SelectItem>
+                            <SelectItem value="female">女性</SelectItem>
+                            <SelectItem value="other">その他</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full rounded-lg text-xs"
+                      onClick={() => {
+                        const settings = { ...preRecordSettings, mode: preRecordMode };
+                        const updated = updateProject(projectId!, { preRecordSettings: settings });
+                        if (updated) setProject(updated);
+                        toast.success("カルテ設定を保存しました");
+                      }}
+                    >
+                      <Check className="h-3 w-3 mr-1" />
+                      設定を保存
+                    </Button>
+                  </div>
+                )}
+
+                {preRecordMode === null && (
+                  <p className="text-xs text-muted-foreground text-center py-1">
+                    選択すると録音後に自動で情報が入力されます
+                  </p>
+                )}
+              </div>
+
+              {/* 録音ボタン */}
+              <div className="text-center">
+                <Button onClick={startRecording} size="lg" className="btn-gradient text-white border-0 px-8 py-6 rounded-xl">
+                  <Mic className="h-5 w-5 mr-2" />
+                  録音を開始
+                </Button>
+              </div>
             </div>
           )}
         </div>
