@@ -42,7 +42,10 @@ import {
   Coins,
   AlertTriangle,
   Camera,
-  FileDown
+  FileDown,
+  Search,
+  X,
+  Pencil
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { downloadAsPng, downloadAsPdf } from "@/lib/exportDocument";
@@ -68,6 +71,81 @@ import { KARTE_FORMATS, DEFAULT_KARTE_FORMAT_ID } from "../../../../shared/karte
 const CHUNK_SIZE = 8000;
 function estimateChunkCount(text: string): number {
   return Math.max(1, Math.ceil(text.length / CHUNK_SIZE));
+}
+
+/** テキスト内のキーワードをハイライトして返すコンポーネント */
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-yellow-200 text-yellow-900 rounded px-0.5">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+/** 書き起こしセグメントリスト（検索ハイライト対応） */
+function TranscriptionSegmentList({
+  segments,
+  searchQuery,
+  onMatchCountChange,
+}: {
+  segments: TranscriptionSegment[];
+  searchQuery: string;
+  onMatchCountChange: (count: number) => void;
+}) {
+  const filteredSegments = useMemo(() => {
+    if (!searchQuery.trim()) {
+      onMatchCountChange(0);
+      return segments;
+    }
+    const q = searchQuery.toLowerCase();
+    const matched = segments.filter(
+      (s) => s.text.toLowerCase().includes(q) || s.speaker.toLowerCase().includes(q)
+    );
+    // マッチ件数を集計（テキスト内の出現回数）
+    let count = 0;
+    const regex = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    matched.forEach((s) => {
+      const m = s.text.match(regex);
+      if (m) count += m.length;
+    });
+    onMatchCountChange(count);
+    return matched;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments, searchQuery]);
+
+  return (
+    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+      {filteredSegments.length === 0 && searchQuery ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          「{searchQuery}」は見つかりませんでした
+        </div>
+      ) : (
+        filteredSegments.map((segment, index) => (
+          <div key={index} className={`flex gap-3 p-3 rounded-xl ${getSpeakerColor(segment.speaker)}`}>
+            <div className="flex-shrink-0">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${getSpeakerIconColor(segment.speaker)}`}>
+                {getSpeakerNumber(segment.speaker)}
+              </div>
+              <div className="text-xs text-center mt-1 font-medium text-muted-foreground">
+                {segment.speaker}
+              </div>
+            </div>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed pl-9">
+              <HighlightText text={segment.text} query={searchQuery} />
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
 }
 
 function getSpeakerColor(speakerName: string): string {
@@ -1098,6 +1176,24 @@ export default function ProjectDetail() {
     }
   };
 
+  // 書き起こしのみリセット（音声は保持して再書き起こし）
+  const handleReTranscribe = () => {
+    const updated = updateProject(projectId!, {
+      status: "recorded",
+      transcription: null,
+      summary: null,
+      minutes: null,
+      karte: null,
+      tokenUsage: {},
+    });
+    if (updated) {
+      setProject(updated);
+      setEditedTranscription("");
+      setSearchQuery("");
+    }
+    toast.info("書き起こしをリセットしました。話者数を変更して再書き起こしできます。");
+  };
+
   const currentAudioUrl = audioUrl || savedAudioUrl;
   const speakers = useMemo(() => {
     return project?.transcription ? extractSpeakers(project.transcription) : [];
@@ -1107,6 +1203,25 @@ export default function ProjectDetail() {
   }, [project?.transcription]);
   const tokenTotals = project?.tokenUsage ? getTotalTokens(project.tokenUsage) : { input: 0, output: 0 };
   const tokenCost = project?.tokenUsage ? calculateTokenCost(project.tokenUsage) : 0;
+
+  // 書き起こし検索
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+
+  // プロジェクト名編集
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingName, setEditingName] = useState("");
+
+  const handleSaveProjectName = () => {
+    if (!projectId || !editingName.trim()) {
+      setIsEditingName(false);
+      return;
+    }
+    const updated = updateProject(projectId, { name: editingName.trim() });
+    if (updated) setProject(updated);
+    setIsEditingName(false);
+    toast.success("プロジェクト名を変更しました");
+  };
 
   // 処理中かどうか
   const isProcessing = transcribeMutation.isPending || transcribeChunkMutation.isPending || summarizeMutation.isPending || minutesMutation.isPending || karteMutation.isPending;
@@ -1147,7 +1262,38 @@ export default function ProjectDetail() {
           </Badge>
         </div>
         <div className="container pb-4">
-          <h1 className="text-xl font-bold line-clamp-1">{project.name}</h1>
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveProjectName();
+                  if (e.key === "Escape") setIsEditingName(false);
+                }}
+                className="text-xl font-bold bg-transparent border-b-2 border-primary outline-none flex-1 min-w-0"
+              />
+              <button onClick={handleSaveProjectName} className="p-1 rounded-lg hover:bg-primary/10 text-primary">
+                <Check className="h-4 w-4" />
+              </button>
+              <button onClick={() => setIsEditingName(false)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <h1 className="text-xl font-bold line-clamp-1">{project.name}</h1>
+              <button
+                onClick={() => { setEditingName(project.name); setIsEditingName(true); }}
+                className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all"
+                title="プロジェクト名を編集"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground mt-1">
             {new Date(project.createdAt).toLocaleString("ja-JP")}
           </p>
@@ -1487,7 +1633,7 @@ export default function ProjectDetail() {
                 <h2 className="font-semibold">書き起こし</h2>
               </div>
               {project.transcription && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1520,9 +1666,48 @@ export default function ProjectDetail() {
                     <Users className="h-4 w-4 mr-1" />
                     話者名変更
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleReTranscribe}
+                    className="glass-button rounded-lg text-amber-600 hover:text-amber-700"
+                    title="話者数を変更して書き起こしをやり直す"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    再書き起こし
+                  </Button>
                 </div>
               )}
             </div>
+
+            {/* 検索バー（書き起こし表示時のみ） */}
+            {project.transcription && !isEditMode && (
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="書き起こし内を検索..."
+                    className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-border/50 bg-white/30 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {searchQuery && (
+                  <p className="text-xs text-muted-foreground mt-1 ml-1">
+                    {searchMatchCount > 0 ? `${searchMatchCount}件ヒット` : "見つかりませんでした"}
+                  </p>
+                )}
+              </div>
+            )}
 
             {!project.transcription ? (
               <div className="space-y-4">
@@ -1583,21 +1768,11 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                  {transcriptionSegments.map((segment, index) => (
-                    <div key={index} className={`flex gap-3 p-3 rounded-xl ${getSpeakerColor(segment.speaker)}`}>
-                      <div className="flex-shrink-0">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${getSpeakerIconColor(segment.speaker)}`}>
-                          {getSpeakerNumber(segment.speaker)}
-                        </div>
-                        <div className="text-xs text-center mt-1 font-medium text-muted-foreground">
-                          {segment.speaker}
-                        </div>
-                      </div>
-                      <div className="text-sm whitespace-pre-wrap leading-relaxed pl-9">{segment.text}</div>
-                    </div>
-                  ))}
-                </div>
+                <TranscriptionSegmentList
+                  segments={transcriptionSegments}
+                  searchQuery={searchQuery}
+                  onMatchCountChange={setSearchMatchCount}
+                />
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
