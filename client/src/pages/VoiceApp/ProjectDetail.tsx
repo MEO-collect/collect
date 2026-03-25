@@ -45,7 +45,8 @@ import {
   FileDown,
   Search,
   X,
-  Pencil
+  Pencil,
+  Maximize2
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { downloadAsPng, downloadAsPdf } from "@/lib/exportDocument";
@@ -1194,6 +1195,25 @@ export default function ProjectDetail() {
     toast.info("書き起こしをリセットしました。話者数を変更して再書き起こしできます。");
   };
 
+  // 書き起こしのPNG/PDFエクスポート
+  const transcriptionExportRef = useRef<HTMLDivElement>(null);
+  const handleExportTranscription = useCallback(async (type: "png" | "pdf") => {
+    if (!transcriptionExportRef.current) return;
+    const name = `${project?.name || "書き起こし"}_書き起こし`;
+    try {
+      if (type === "png") {
+        await downloadAsPng(transcriptionExportRef.current, name);
+        toast.success("書き起こしをPNGで保存しました");
+      } else {
+        await downloadAsPdf(transcriptionExportRef.current, name);
+        toast.success("印刷ダイアログが開きました。「PDFとして保存」を選択してください。", { duration: 5000 });
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      toast.error("保存に失敗しました。コピー機能をお使いください。");
+    }
+  }, [project?.name]);
+
   const currentAudioUrl = audioUrl || savedAudioUrl;
   const speakers = useMemo(() => {
     return project?.transcription ? extractSpeakers(project.transcription) : [];
@@ -1211,6 +1231,9 @@ export default function ProjectDetail() {
   // プロジェクト名編集
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState("");
+
+  // フルスクリーンプレビュー
+  const [previewContent, setPreviewContent] = useState<{ type: "minutes" | "karte"; content: string } | null>(null);
 
   const handleSaveProjectName = () => {
     if (!projectId || !editingName.trim()) {
@@ -1337,6 +1360,13 @@ export default function ProjectDetail() {
               <div className="text-5xl font-mono font-bold text-red-600 mb-6">
                 {formatDuration(duration)}
               </div>
+              {/* 30分超え警告バナー */}
+              {duration > 1800 && (
+                <div className="mb-4 mx-auto max-w-sm p-3 rounded-xl bg-amber-50/90 border border-amber-300/60 text-sm text-amber-800 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span><strong>30分超過:</strong> 長時間音声は自動分割処理になります。ページを閉じないでください。</span>
+                </div>
+              )}
               <div className="flex justify-center gap-3">
                 {isPaused ? (
                   <Button onClick={resumeRecording} className="glass-button rounded-xl">
@@ -1768,12 +1798,25 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* 書き起こしエクスポート用の非表示コンテナ */}
+                <div ref={transcriptionExportRef} className="hidden">
+                  <div className="p-6 bg-white">
+                    <h2 className="text-xl font-bold mb-4">{project.name} - 書き起こし</h2>
+                    <p className="text-xs text-gray-500 mb-6">{new Date(project.createdAt).toLocaleString("ja-JP")}</p>
+                    {transcriptionSegments.map((seg, i) => (
+                      <div key={i} className="mb-3">
+                        <span className="font-semibold text-sm">{seg.speaker}: </span>
+                        <span className="text-sm">{seg.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <TranscriptionSegmentList
                   segments={transcriptionSegments}
                   searchQuery={searchQuery}
                   onMatchCountChange={setSearchMatchCount}
                 />
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1791,6 +1834,24 @@ export default function ProjectDetail() {
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Word
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportTranscription("png")}
+                    className="glass-button rounded-xl"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    PNG
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportTranscription("pdf")}
+                    className="glass-button rounded-xl"
+                  >
+                    <FileDown className="h-4 w-4 mr-2" />
+                    PDF
                   </Button>
                 </div>
               </div>
@@ -1956,6 +2017,15 @@ export default function ProjectDetail() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setPreviewContent({ type: "minutes", content: project.minutes! })}
+                        className="glass-button rounded-xl"
+                      >
+                        <Maximize2 className="h-4 w-4 mr-2" />
+                        プレビュー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleCopyToClipboard(project.minutes!)}
                         className="glass-button rounded-xl"
                       >
@@ -1995,6 +2065,7 @@ export default function ProjectDetail() {
                         onClick={() => {
                           const updated = updateProject(projectId!, { minutes: null });
                           if (updated) setProject(updated);
+                          // フォーマット設定は minutesTemplate / minutesMetadata に保持されるのでそのまま
                         }}
                         className="glass-button rounded-xl"
                       >
@@ -2111,6 +2182,15 @@ export default function ProjectDetail() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setPreviewContent({ type: "karte", content: project.karte! })}
+                        className="glass-button rounded-xl"
+                      >
+                        <Maximize2 className="h-4 w-4 mr-2" />
+                        プレビュー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleCopyToClipboard(project.karte!)}
                         className="glass-button rounded-xl"
                       >
@@ -2150,6 +2230,7 @@ export default function ProjectDetail() {
                         onClick={() => {
                           const updated = updateProject(projectId!, { karte: null });
                           if (updated) setProject(updated);
+                          // フォーマット設定は karteFormatId / kartePatientInfo に保持されるのでそのまま
                         }}
                         className="glass-button rounded-xl"
                       >
@@ -2164,6 +2245,61 @@ export default function ProjectDetail() {
           </div>
         )}
       </main>
+
+      {/* フルスクリーンプレビューモーダル */}
+      {previewContent && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex flex-col"
+          onClick={() => setPreviewContent(null)}
+        >
+          <div
+            className="flex items-center justify-between px-4 py-3 bg-white/10 backdrop-blur-sm border-b border-white/20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-white font-semibold text-sm">
+              {previewContent.type === "minutes" ? "議事録プレビュー" : "カルテプレビュー"}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleCopyToClipboard(previewContent.content)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs transition-colors"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+                コピー
+              </button>
+              <button
+                onClick={() => {
+                  if (previewContent.type === "minutes") {
+                    handleExportMinutes("pdf");
+                  } else {
+                    handleExportKarte("pdf");
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs transition-colors"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                PDF
+              </button>
+              <button
+                onClick={() => setPreviewContent(null)}
+                className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div
+            className="flex-1 overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-2xl p-8">
+              <div className="prose prose-sm max-w-none">
+                <Streamdown>{previewContent.content}</Streamdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* エラー報告ダイアログ */}
       <Dialog open={!!errorReportInfo} onOpenChange={(open) => { if (!open) setErrorReportInfo(null); }}>

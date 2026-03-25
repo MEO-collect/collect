@@ -29,9 +29,11 @@ import {
   Mic, 
   Plus, 
   Trash2,
-  FileText
+  FileText,
+  ArrowUpDown,
+  Filter
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { 
   getProjects, 
@@ -75,6 +77,16 @@ export default function ProjectList() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | ProjectStatus>("all");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+
+  const filteredProjects = useMemo(() => {
+    let list = filterStatus === "all" ? projects : projects.filter(p => p.status === filterStatus);
+    list = [...list].sort((a, b) =>
+      sortOrder === "newest" ? b.createdAt - a.createdAt : a.createdAt - b.createdAt
+    );
+    return list;
+  }, [projects, filterStatus, sortOrder]);
 
   useEffect(() => {
     setProjects(getProjects());
@@ -152,6 +164,37 @@ export default function ProjectList() {
           </div>
         </div>
 
+        {/* フィルター・並び替えバー */}
+        {projects.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+            {/* ステータスフィルター */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              {(["all", "created", "recorded", "transcribed", "summarized"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    filterStatus === s
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-white/40 text-muted-foreground hover:bg-white/60 backdrop-blur-sm"
+                  }`}
+                >
+                  {s === "all" ? "すべて" : statusConfig[s].label}
+                </button>
+              ))}
+            </div>
+            {/* 並び替え */}
+            <button
+              onClick={() => setSortOrder(o => o === "newest" ? "oldest" : "newest")}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white/40 hover:bg-white/60 backdrop-blur-sm text-muted-foreground transition-all"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {sortOrder === "newest" ? "新しい順" : "古い順"}
+            </button>
+          </div>
+        )}
+
         {/* プロジェクトグリッド */}
         {projects.length === 0 ? (
           <div className="glass-card text-center py-16 px-8">
@@ -170,9 +213,14 @@ export default function ProjectList() {
               新規プロジェクト
             </Button>
           </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="glass-card text-center py-12 px-8">
+            <p className="text-muted-foreground">該当するプロジェクトがありません</p>
+            <button onClick={() => setFilterStatus("all")} className="mt-3 text-sm text-primary hover:underline">フィルターをリセット</button>
+          </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => {
+            {filteredProjects.map((project) => {
               const status = statusConfig[project.status];
               return (
                 <div 
