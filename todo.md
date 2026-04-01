@@ -368,3 +368,7 @@
 - [x] 皮膚科初診問診票フォーマット追加（dermatology_initial）
 - [x] 皮膚科カルテ（診察記録）フォーマット追加（dermatology_karte）
 - [x] テスト追加と動作確認
+
+## Coming Soon対応（2026-04-01）
+- [x] AI画像加工をComing Soon表示に変更（ホーム画面・ナビゲーション）
+- [x] AI文章作成をComing Soon表示に変更（ホーム画面・ナビゲーション）

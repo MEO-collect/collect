@@ -26,20 +26,31 @@ interface AppCardProps {
   icon: React.ReactNode;
   isLocked?: boolean;
   lockReason?: string;
+  isComingSoon?: boolean;
   onClick?: () => void;
 }
 
-function AppCard({ title, description, icon, isLocked = false, lockReason, onClick }: AppCardProps) {
+function AppCard({ title, description, icon, isLocked = false, lockReason, isComingSoon = false, onClick }: AppCardProps) {
   return (
     <div 
       className={`relative overflow-hidden glass-card p-6 ${
-        isLocked 
+        isLocked || isComingSoon
           ? "opacity-70 cursor-not-allowed" 
           : "hover-lift cursor-pointer"
       }`}
-      onClick={isLocked ? undefined : onClick}
+      onClick={isLocked || isComingSoon ? undefined : onClick}
     >
-      {isLocked && (
+      {isComingSoon && (
+        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-10 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-xs font-medium text-center bg-primary/10 text-primary rounded-full py-1 px-3">Coming Soon</span>
+          </div>
+        </div>
+      )}
+      {isLocked && !isComingSoon && (
         <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-10 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/80">
@@ -288,7 +299,8 @@ export default function AppHome() {
       title: "AI文章作成",
       description: "SNS・ブログ・MEO用の文章をAIで自動生成。Instagram、LINE、ブログ、GBPに対応",
       icon: <PenTool className="h-6 w-6 text-primary" />,
-      isLocked: !isSubscriptionActive,
+      isLocked: false,
+      isComingSoon: true,
       path: "/app/bizwriter",
     },
     {
@@ -296,7 +308,8 @@ export default function AppHome() {
       title: "AI画像加工",
       description: "AIで写真を美しく加工。フォトエディター＆マジック消しゴムで、プロ級の画像編集を実現します",
       icon: <Image className="h-6 w-6 text-primary" />,
-      isLocked: !isSubscriptionActive,
+      isLocked: false,
+      isComingSoon: true,
       path: "/app/image",
     },
     {
@@ -480,7 +493,8 @@ export default function AppHome() {
               title={app.title}
               description={app.description}
               icon={app.icon}
-              isLocked={app.isLocked}
+              isLocked={app.isLocked && !app.isComingSoon}
+              isComingSoon={app.isComingSoon}
               lockReason={lockReason}
               onClick={app.path ? () => { window.location.href = app.path; } : undefined}
             />
