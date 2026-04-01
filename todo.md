@@ -372,3 +372,8 @@
 ## Coming Soon対応（2026-04-01）
 - [x] AI画像加工をComing Soon表示に変更（ホーム画面・ナビゲーション）
 - [x] AI文章作成をComing Soon表示に変更（ホーム画面・ナビゲーション）
+
+## Gemini API直接切り替え（2026-04-01）
+- [x] llm.tsをManus Built-in APIからGoogle Gemini API（OpenAI互換エンドポイント）に切り替え
+- [x] 書き起こし（Whisper）はBuilt-in APIのまま維持
+- [x] テストとビルド確認
