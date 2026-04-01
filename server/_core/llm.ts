@@ -331,11 +331,50 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = await response.text().catch(() => "");
+    const status = response.status;
+
+    // ユーザー向けに分かりやすいエラーメッセージを付与
+    if (status === 503) {
+      throw new Error(
+        `SERVICE_UNAVAILABLE: AIサービスが一時的に混雑しています。しばらく待ってから再試行してください。(503)`
+      );
+    }
+    if (status === 412) {
+      throw new Error(
+        `PRECONDITION_FAILED: APIの利用条件が満たされていません。プランの制限に達した可能性があります。しばらく待ってから再試行してください。(412)`
+      );
+    }
+    if (status === 429) {
+      throw new Error(
+        `RATE_LIMITED: APIのリクエスト制限に達しました。しばらく待ってから再試行してください。(429)`
+      );
+    }
+    if (status >= 500) {
+      throw new Error(
+        `SERVER_ERROR: AIサービスでエラーが発生しました。しばらく待ってから再試行してください。(${status})`
+      );
+    }
+
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      `LLM invoke failed: ${status} ${response.statusText} – ${errorText}`
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  // レスポンスがJSONでない場合（HTMLエラーページなど）を安全にハンドリング
+  const responseText = await response.text();
+  try {
+    return JSON.parse(responseText) as InvokeResult;
+  } catch {
+    // JSONパース失敗 = HTMLエラーページ等が返ってきた場合
+    const preview = responseText.substring(0, 200);
+    if (responseText.includes("Service Unavailable") || responseText.includes("503")) {
+      throw new Error(
+        `SERVICE_UNAVAILABLE: AIサービスが一時的に混雑しています。しばらく待ってから再試行してください。(503)`
+      );
+    }
+    throw new Error(
+      `LLM response is not valid JSON: ${preview}`
+    );
+  }
 }

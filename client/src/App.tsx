@@ -19,6 +19,7 @@ import MagicEraser from "./pages/ImageApp/MagicEraser";
 import CalendarQRApp from "./pages/CalendarQR/CalendarQRApp";
 import BizWriterApp from "./pages/BizWriter/BizWriterApp";
 import ShozaiDoctorApp from "./pages/ShozaiDoctor/ShozaiDoctorApp";
+import AdminErrorReports from "./pages/AdminErrorReports";
 
 function Router() {
   return (
@@ -54,6 +55,9 @@ function Router() {
       {/* 商材ドクター routes */}
       <Route path="/app/shozai-doctor" component={ShozaiDoctorApp} />
       
+      {/* Admin routes */}
+      <Route path="/admin/errors" component={AdminErrorReports} />
+
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

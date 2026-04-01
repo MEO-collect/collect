@@ -582,7 +582,8 @@ export const appRouter = router({
           userComment: input.userComment ?? null,
           userAgent: null, // フロントエンドから渡す場合はcontextに含める
         });
-        console.log(`[ErrorReport] Saved error report from user ${ctx.user.id}: ${input.appName}/${input.operation}`);
+        const jstTime = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+        console.log(`[ErrorReport] ${jstTime} (JST) - Saved error report from user ${ctx.user.id}: ${input.appName}/${input.operation}`);
         return { success: true };
       }),
 

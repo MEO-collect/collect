@@ -198,6 +198,35 @@ interface TranscriptionSegment {
   text: string;
 }
 
+/**
+ * サーバーエラーメッセージをユーザー向けの日本語に変換する
+ * SERVICE_UNAVAILABLE・PRECONDITION_FAILEDなどのエラーコードを分かりやすいメッセージに変換
+ */
+function parseUserFriendlyError(errorMessage: string): string {
+  if (errorMessage.includes("SERVICE_UNAVAILABLE")) {
+    return "AIサービスが一時的に混雑しています。数分待ってから再試行してください。(503)";
+  }
+  if (errorMessage.includes("PRECONDITION_FAILED")) {
+    return "APIの利用条件が満たされていません。プランの制限に達した可能性があります。しばらく待ってから再試行してください。(412)";
+  }
+  if (errorMessage.includes("RATE_LIMITED")) {
+    return "APIのリクエスト制限に達しました。しばらく待ってから再試行してください。(429)";
+  }
+  if (errorMessage.includes("SERVER_ERROR")) {
+    return "AIサービスでエラーが発生しました。しばらく待ってから再試行してください。";
+  }
+  if (errorMessage.includes("LLM response is not valid JSON")) {
+    return "AIサービスから異常なレスポンスが返ってきました。しばらく待ってから再試行してください。";
+  }
+  if (errorMessage.includes("412 Precondition Failed")) {
+    return "APIの利用条件が満たされていません。プランの制限に達した可能性があります。しばらく待ってから再試行してください。(412)";
+  }
+  if (errorMessage.includes("503") || errorMessage.includes("Service Unavailable")) {
+    return "AIサービスが一時的に利用できません。数分待ってから再試行してください。(503)";
+  }
+  return errorMessage;
+}
+
 function parseTranscription(text: string): TranscriptionSegment[] {
   const lines = text.split("\n");
   const segments: TranscriptionSegment[] = [];
@@ -698,17 +727,19 @@ export default function ProjectDetail() {
       setProcessingProgress(null);
       console.error("Transcription error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
+      const friendlyMsg = parseUserFriendlyError(errMsg);
       const ctx = JSON.stringify({
         duration: project?.recordingDuration,
         speakerCount,
         mimeType: audioBlob?.type || "unknown",
         userAgent: navigator.userAgent,
       });
-      // エラーを自動的にDBに保存
+      // エラーを自動的にデータベースに保存
       await autoSaveError("transcribe", errMsg, ctx);
       toast.error(
         <div className="flex flex-col gap-2">
           <span>書き起こしに失敗しました</span>
+          <span className="text-xs text-destructive-foreground/70">{friendlyMsg}</span>
           <button
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("transcribe", errMsg, ctx)}
@@ -785,16 +816,18 @@ export default function ProjectDetail() {
       setProcessingProgress(null);
       console.error("Summary error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
+      const friendlyMsg = parseUserFriendlyError(errMsg);
       const ctx = JSON.stringify({
         transcriptionLength: project?.transcription?.length,
         estimatedChunks: estimateChunkCount(project?.transcription || ""),
         userAgent: navigator.userAgent,
       });
-      // エラーを自動的にDBに保存
+      // エラーを自動的にデータベースに保存
       await autoSaveError("summarize", errMsg, ctx);
       toast.error(
         <div className="flex flex-col gap-2">
           <span>要約に失敗しました</span>
+          <span className="text-xs text-destructive-foreground/70">{friendlyMsg}</span>
           <button
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("summarize", errMsg, ctx)}
@@ -995,6 +1028,7 @@ export default function ProjectDetail() {
       setProcessingProgress(null);
       console.error("Minutes error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
+      const friendlyMsg = parseUserFriendlyError(errMsg);
       const ctx = JSON.stringify({
         transcriptionLength: project?.transcription?.length,
         estimatedChunks: estimateChunkCount(project?.transcription || ""),
@@ -1005,6 +1039,7 @@ export default function ProjectDetail() {
       toast.error(
         <div className="flex flex-col gap-2">
           <span>議事録の生成に失敗しました</span>
+          <span className="text-xs text-destructive-foreground/70">{friendlyMsg}</span>
           <button
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("generateMinutes", errMsg, ctx)}
@@ -1084,6 +1119,7 @@ export default function ProjectDetail() {
       setProcessingProgress(null);
       console.error("Karte error:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
+      const friendlyMsg = parseUserFriendlyError(errMsg);
       const ctx = JSON.stringify({
         transcriptionLength: project?.transcription?.length,
         estimatedChunks: estimateChunkCount(project?.transcription || ""),
@@ -1094,6 +1130,7 @@ export default function ProjectDetail() {
       toast.error(
         <div className="flex flex-col gap-2">
           <span>カルテの生成に失敗しました</span>
+          <span className="text-xs text-destructive-foreground/70">{friendlyMsg}</span>
           <button
             className="text-xs underline text-left text-destructive-foreground/80"
             onClick={() => openErrorReport("generateKarte", errMsg, ctx)}
