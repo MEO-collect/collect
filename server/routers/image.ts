@@ -188,6 +188,7 @@ function buildPhotoEditPrompt(params: {
   locationChange?: string;
   removeWires?: boolean;
   removePeople?: boolean;
+  removeShadow?: boolean;
   customPrompt?: string;
 }): string {
   const instructions: string[] = [];
@@ -231,6 +232,9 @@ function buildPhotoEditPrompt(params: {
   }
   if (params.removePeople) {
     instructions.push("画像内の不要な人物を自然に消去し、背景を補完してください");
+  }
+  if (params.removeShadow) {
+    instructions.push("画像内の影（落ち影・影素）を自然に除去し、影のあった部分を周囲の色・テクスチャに合わせて自然に補完してください");
   }
 
   // Style transforms
@@ -300,6 +304,7 @@ export const imageRouter = router({
       locationChange: z.string().optional(),
       removeWires: z.boolean().optional(),
       removePeople: z.boolean().optional(),
+      removeShadow: z.boolean().optional(),
       customPrompt: z.string().optional(),
       numberOfImages: z.number().min(1).max(4).default(1),
     }))

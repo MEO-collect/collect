@@ -40,6 +40,7 @@ type EditParams = {
   locationChange: string;
   removeWires: boolean;
   removePeople: boolean;
+  removeShadow: boolean;
   customPrompt: string;
   numberOfImages: number;
 };
@@ -57,6 +58,7 @@ const defaultParams: EditParams = {
   locationChange: "",
   removeWires: false,
   removePeople: false,
+  removeShadow: false,
   customPrompt: "",
   numberOfImages: 1,
 };
@@ -455,6 +457,13 @@ export default function PhotoEditor() {
                   <Switch
                     checked={params.removePeople}
                     onCheckedChange={(v) => updateParam("removePeople", v)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">影を消去</Label>
+                  <Switch
+                    checked={params.removeShadow}
+                    onCheckedChange={(v) => updateParam("removeShadow", v)}
                   />
                 </div>
               </div>

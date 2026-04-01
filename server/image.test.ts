@@ -125,6 +125,7 @@ describe("Image Router", () => {
         locationChange: z.string().optional(),
         removeWires: z.boolean().optional(),
         removePeople: z.boolean().optional(),
+        removeShadow: z.boolean().optional(),
         customPrompt: z.string().optional(),
         numberOfImages: z.number().min(1).max(4).default(1),
       });
@@ -136,6 +137,13 @@ describe("Image Router", () => {
         styleTransform: "anime",
       });
       expect(validResult.success).toBe(true);
+
+      // removeShadow flag
+      const shadowResult = editPhotoSchema.safeParse({
+        imageBase64: "base64data",
+        removeShadow: true,
+      });
+      expect(shadowResult.success).toBe(true);
 
       // Invalid brightness (out of range)
       const invalidResult = editPhotoSchema.safeParse({
