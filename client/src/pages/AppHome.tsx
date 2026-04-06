@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   CreditCard,
   RefreshCw,
-  Coins,
+  Gem,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -363,7 +363,7 @@ export default function AppHome() {
               onClick={() => { window.location.href = "/tokens"; }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass-button text-sm font-medium hover:bg-primary/10 transition-colors"
             >
-              <Coins className="h-4 w-4 text-primary" />
+              <Gem className="h-4 w-4 text-primary" />
               <span className="text-primary font-bold">
                 {tokenBalance ? (tokenBalance.monthlyBalance + tokenBalance.bonusBalance).toLocaleString() : "—"}
               </span>

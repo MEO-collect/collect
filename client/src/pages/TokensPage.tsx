@@ -6,7 +6,6 @@ import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft,
-  Coins,
   History,
   Loader2,
   Plus,
@@ -14,6 +13,7 @@ import {
   Sparkles,
   TrendingDown,
   Zap,
+  Gem,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -149,7 +149,7 @@ export default function TokensPage() {
           </Button>
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-              <Coins className="h-5 w-5 text-primary" />
+              <Gem className="h-5 w-5 text-primary" />
             </div>
             <span className="font-semibold text-lg">トークン管理</span>
           </div>
@@ -163,7 +163,7 @@ export default function TokensPage() {
           <Card className="glass-card md:col-span-1 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-primary" />
+                <Gem className="h-4 w-4 text-primary" />
                 合計残高
               </CardDescription>
               <CardTitle className="text-4xl font-bold text-primary">
@@ -303,7 +303,7 @@ export default function TokensPage() {
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            ※ 追加購入トークンは月をまたいで繰り越し可能です。月額トークン（{(costDefs?.monthlyGrant ?? 50000).toLocaleString()}T）より単価が高くなることはありません。
+            ※ 追加購入トークンは月をまたいで繰り越し可能です。
           </p>
         </div>
 
