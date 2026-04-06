@@ -19,6 +19,17 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
+// トークン数から各機能の利用可能量を計算
+function calcUsage(tokens: number) {
+  return {
+    scribeMinutes: Math.floor(tokens / 6),       // ElevenLabs: 6T/分
+    geminiMinutes: Math.floor(tokens / 2),       // Gemini: 2T/分
+    imageEdits: Math.floor(tokens / 6),          // 画像加工: 6T/回
+    summaries: Math.floor(tokens / 5),           // 要約: 5T/回
+    shozai: Math.floor(tokens / 12),             // 商材ドクター: 12T/回
+  };
+}
+
 const APP_LABEL: Record<string, string> = {
   voice: "音声書き起こし",
   bizwriter: "AI文章作成",
@@ -279,6 +290,22 @@ export default function TokensPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="px-4 pb-4 space-y-2">
+                    {/* 利用換算表示 */}
+                    {(() => {
+                      const u = calcUsage(plan.tokens);
+                      return (
+                        <div className="space-y-1 py-1 border-t border-border/50">
+                          <p className="text-xs font-medium text-muted-foreground">このトークンでできること</p>
+                          <ul className="text-xs text-foreground space-y-0.5">
+                            <li>🎤 書き起こし <span className="font-bold text-primary">{u.scribeMinutes}分</span><span className="text-muted-foreground">（Scribe）</span></li>
+                            <li>🎤 書き起こし <span className="font-bold text-emerald-600">{u.geminiMinutes}分</span><span className="text-muted-foreground">（Gemini）</span></li>
+                            <li>🖼️ 画像加工 <span className="font-bold text-primary">{u.imageEdits}枚</span></li>
+                            <li>📝 要約生成 <span className="font-bold text-primary">{u.summaries}回</span></li>
+                            <li>🔬 商材ドクター <span className="font-bold text-primary">{u.shozai}回</span></li>
+                          </ul>
+                        </div>
+                      );
+                    })()}
                     <p className="text-xs text-muted-foreground">
                       {Number(plan.unitPriceJpy).toFixed(3)}円/T
                     </p>
