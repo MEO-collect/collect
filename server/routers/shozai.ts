@@ -3,6 +3,8 @@ import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import { calculateCostYen } from "@shared/shozai-types";
 import type { AnalysisResult, DiagnosisResult, TokenUsage } from "@shared/shozai-types";
+import { consumeTokens, grantMonthlyTokens } from "../tokenManager";
+import { TRPCError } from "@trpc/server";
 
 // ============ 分析エンドポイント ============
 const analyzeSchema = z.object({
@@ -42,7 +44,21 @@ export const shozaiRouter = router({
   // フェーズ3: 資料分析
   analyze: subscribedProcedure
     .input(analyzeSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "shozai_analyze",
+        appName: "shozai",
+        feature: "analyze",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
+
       const { files, profile, companyUrl } = input;
 
       // URLモードの場合はWebページからコンテンツを取得
@@ -191,7 +207,21 @@ ${urlContent}` : ""}
   // フェーズ4: AI診断
   diagnose: subscribedProcedure
     .input(diagnoseSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "shozai_diagnose",
+        appName: "shozai",
+        feature: "diagnose",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
+
       const { analysis, profile } = input;
 
       // 現在の日付を取得（日本時間）

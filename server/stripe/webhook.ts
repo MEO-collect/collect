@@ -5,6 +5,7 @@ import { ENV } from "../_core/env";
 import { getSubscriptionByStripeSubscriptionId, updateSubscriptionByStripeId, getSubscriptionByStripeCustomerId, updateSubscription, createSubscription, getSubscription } from "../db";
 import { SUBSCRIPTION_PLAN } from "./products";
 import { extractSubData, subDataToDbFields } from "./helpers";
+import { addPurchasedTokens, grantMonthlyTokens } from "../tokenManager";
 
 /**
  * Helper: Calculate initial period end date from start date (ms)
@@ -144,6 +145,26 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           metadata: session.metadata,
           paymentStatus: session.payment_status,
         });
+
+        // トークン追加購入の処理
+        if (session.mode === "payment" && session.metadata?.purchase_type === "token_addon") {
+          const userId = session.client_reference_id
+            ? parseInt(session.client_reference_id, 10)
+            : session.metadata?.user_id ? parseInt(session.metadata.user_id, 10) : null;
+          const tokens = session.metadata?.tokens ? parseInt(session.metadata.tokens, 10) : 0;
+          const planId = session.metadata?.plan_id || "unknown";
+          const paymentIntentId = typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id || "";
+
+          if (userId && !isNaN(userId) && tokens > 0) {
+            await addPurchasedTokens(userId, tokens, paymentIntentId, planId);
+            console.log(`[Webhook] Token purchase: user=${userId} tokens=${tokens} plan=${planId}`);
+          } else {
+            console.error("[Webhook] Token purchase: invalid userId or tokens", { userId, tokens });
+          }
+          break;
+        }
 
         if (session.mode === "subscription" && session.subscription) {
           const subscriptionId = typeof session.subscription === "string" 

@@ -12,6 +12,7 @@ import { voiceRouter } from "./routers/voice";
 import { imageRouter } from "./routers/image";
 import { bizwriterRouter } from "./routers/bizwriter";
 import { shozaiRouter } from "./routers/shozai";
+import { tokensRouter } from "./routers/tokens";
 
 export const appRouter = router({
   system: systemRouter,
@@ -564,6 +565,9 @@ export const appRouter = router({
 
   // 商材ドクター router
   shozai: shozaiRouter,
+
+  // トークン管理 router
+  tokens: tokensRouter,
 
   // エラー報告 router
   report: router({

@@ -169,3 +169,95 @@ export const errorReports = mysqlTable("error_reports", {
 
 export type ErrorReport = typeof errorReports.$inferSelect;
 export type InsertErrorReport = typeof errorReports.$inferInsert;
+
+/**
+ * Token balances table
+ * 月額サブスクで毎月50,000T支給、繰り越し不可
+ */
+export const tokenBalances = mysqlTable("token_balances", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  /** 月額トークン残高（毎月50,000T支給、繰り越し不可） */
+  monthlyBalance: int("monthlyBalance").default(0).notNull(),
+  /** 追加購入トークン残高（繰り越し可） */
+  bonusBalance: int("bonusBalance").default(0).notNull(),
+  /** 最終月次支給日（Unixタイムスタンプ・ミリ秒） */
+  lastGrantedAt: bigint("lastGrantedAt", { mode: "number" }),
+  /** 次回月次リセット日（Unixタイムスタンプ・ミリ秒） */
+  nextResetAt: bigint("nextResetAt", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TokenBalance = typeof tokenBalances.$inferSelect;
+export type InsertTokenBalance = typeof tokenBalances.$inferInsert;
+
+/**
+ * Token transactions table
+ * トークンの消費・支給・購入履歴
+ */
+export const tokenTransactions = mysqlTable("token_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  /** トランザクション種別 */
+  type: mysqlEnum("type", ["grant_monthly", "consume", "purchase", "expire"]).notNull(),
+  /** トークン変動量（消費は負値、支給・購入は正値） */
+  amount: int("amount").notNull(),
+  /** 消費元アプリ名（例: voice, bizwriter, image, shozai） */
+  appName: varchar("appName", { length: 100 }),
+  /** 消費元機能名（例: transcribe_elevenlabs, summarize, generate_minutes） */
+  feature: varchar("feature", { length: 100 }),
+  /** 消費メタデータ（JSON文字列: 分数・回数等） */
+  metadata: text("metadata"),
+  /** Stripe Payment Intent ID（購入時） */
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  /** 変動後の月額トークン残高 */
+  balanceAfterMonthly: int("balanceAfterMonthly"),
+  /** 変動後のボーナストークン残高 */
+  balanceAfterBonus: int("balanceAfterBonus"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TokenTransaction = typeof tokenTransactions.$inferSelect;
+export type InsertTokenTransaction = typeof tokenTransactions.$inferInsert;
+
+/**
+ * Token purchase plans
+ * 追加課金プラン定義（1000円単位・割引率付き）
+ */
+export const TOKEN_PURCHASE_PLANS = [
+  { id: "plan_1000",  priceJpy: 1000,  tokens: 2400,   label: "\u00a51,000",  discountRate: 0 },
+  { id: "plan_3000",  priceJpy: 3000,  tokens: 7200,   label: "\u00a53,000",  discountRate: 0 },
+  { id: "plan_5000",  priceJpy: 5000,  tokens: 12500,  label: "\u00a55,000",  discountRate: 3 },
+  { id: "plan_10000", priceJpy: 10000, tokens: 25500,  label: "\u00a510,000", discountRate: 6 },
+  { id: "plan_30000", priceJpy: 30000, tokens: 76000,  label: "\u00a530,000", discountRate: 10 },
+  { id: "plan_50000", priceJpy: 50000, tokens: 126000, label: "\u00a550,000", discountRate: 13 },
+] as const;
+
+export type TokenPurchasePlan = typeof TOKEN_PURCHASE_PLANS[number];
+
+/**
+ * 月額支給トークン数
+ * 月額¥19,800 → 50,000T（単価: 0.396円/T、AIコスト: 0.1188円/T、利益率: 70%）
+ */
+export const MONTHLY_TOKEN_GRANT = 50000;
+
+/**
+ * 各機能のトークン消費レート
+ * APIコスト ÷ 0.1188円/T（利益率70%維持）
+ */
+export const TOKEN_COSTS = {
+  // 音声書き起こし（分単位）
+  transcribe_elevenlabs: 6,   // ElevenLabs Scribe v2: 6T/分
+  transcribe_gemini: 2,       // Gemini 2.5/3 Flash: 2T/分
+  // テキスト生成（回単位）
+  summarize: 5,               // 要約生成: 5T/回
+  generate_minutes: 8,        // 議事録生成: 8T/回
+  generate_karte: 8,          // カルテ生成: 8T/回
+  bizwriter_generate: 6,      // AI文章作成: 6T/回
+  shozai_analyze: 12,         // 商材ドクター分析: 12T/回
+  shozai_diagnose: 12,        // 商材ドクター診断: 12T/回
+  image_edit: 6,              // 画像加工（1枚）: 6T/回
+} as const;
+
+export type TokenCostKey = keyof typeof TOKEN_COSTS;

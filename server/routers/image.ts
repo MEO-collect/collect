@@ -2,6 +2,8 @@ import { z } from "zod";
 import { subscribedProcedure, router } from "../_core/trpc";
 import { storagePut } from "../storage";
 import { ENV } from "../_core/env";
+import { consumeTokens, grantMonthlyTokens } from "../tokenManager";
+import { TRPCError } from "@trpc/server";
 
 /**
  * Gemini 画像生成・編集 API ヘルパー
@@ -308,7 +310,21 @@ export const imageRouter = router({
       customPrompt: z.string().optional(),
       numberOfImages: z.number().min(1).max(4).default(1),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "image_edit",
+        appName: "image",
+        feature: "editPhoto",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
+
       const { imageBase64, imageMimeType, numberOfImages, ...editParams } = input;
 
       const prompt = buildPhotoEditPrompt(editParams);
@@ -336,7 +352,21 @@ export const imageRouter = router({
       imageBase64: z.string().describe("マスク付きのBase64エンコードされた画像データ"),
       imageMimeType: z.string().default("image/png"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "image_edit",
+        appName: "image",
+        feature: "magicEraser",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
+
       const { imageBase64, imageMimeType } = input;
 
       const prompt = buildMagicEraserPrompt();

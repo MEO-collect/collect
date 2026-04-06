@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   CreditCard,
   RefreshCw,
+  Coins,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -88,6 +89,17 @@ function AppCard({ title, description, icon, isLocked = false, lockReason, isCom
 export default function AppHome() {
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const { data: tokenBalance } = trpc.tokens.getBalance.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchInterval: 60000,
+  });
+  const grantMonthly = trpc.tokens.grantMonthly.useMutation();
+  useEffect(() => {
+    if (isAuthenticated) {
+      grantMonthly.mutate();
+    }
+  }, [isAuthenticated]);
 
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -346,6 +358,17 @@ export default function AppHome() {
             <span className="font-semibold text-lg">BtoB AIプラットフォーム</span>
           </div>
           <div className="flex items-center gap-2">
+            {/* トークン残高バッジ */}
+            <button
+              onClick={() => { window.location.href = "/tokens"; }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass-button text-sm font-medium hover:bg-primary/10 transition-colors"
+            >
+              <Coins className="h-4 w-4 text-primary" />
+              <span className="text-primary font-bold">
+                {tokenBalance ? (tokenBalance.monthlyBalance + tokenBalance.bonusBalance).toLocaleString() : "—"}
+              </span>
+              <span className="text-muted-foreground text-xs">T</span>
+            </button>
             <Button 
               variant="ghost" 
               size="icon" 

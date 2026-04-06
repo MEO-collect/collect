@@ -4,6 +4,8 @@ import { invokeLLM } from "../_core/llm";
 import { makeRequest, type PlaceDetailsResult, type PlacesSearchResult } from "../_core/map";
 import type { StoreProfile, GeneratedContent, OutputFormat, Tone, Templates } from "@shared/bizwriter-types";
 import { FORMAT_CHAR_LIMITS } from "@shared/bizwriter-types";
+import { consumeTokens, grantMonthlyTokens } from "../tokenManager";
+import { TRPCError } from "@trpc/server";
 
 // ============ Gemini Service Functions ============
 
@@ -490,6 +492,20 @@ export const bizwriterRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "bizwriter_generate",
+        appName: "bizwriter",
+        feature: "generate",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
+
       // avoidRepetitionがtrueの場合、過去の生成履歴を自動取得
       let historyToUse = input.history;
       if (input.avoidRepetition && input.formats.length > 0) {

@@ -19,6 +19,7 @@ import MagicEraser from "./pages/ImageApp/MagicEraser";
 import CalendarQRApp from "./pages/CalendarQR/CalendarQRApp";
 import BizWriterApp from "./pages/BizWriter/BizWriterApp";
 import ShozaiDoctorApp from "./pages/ShozaiDoctor/ShozaiDoctorApp";
+import TokensPage from "./pages/TokensPage";
 
 function Router() {
   return (
@@ -53,6 +54,9 @@ function Router() {
       
       {/* 商材ドクター routes */}
       <Route path="/app/shozai-doctor" component={ShozaiDoctorApp} />
+      
+      {/* トークン管理 */}
+      <Route path="/tokens" component={TokensPage} />
       
       {/* Fallback */}
       <Route path="/404" component={NotFound} />

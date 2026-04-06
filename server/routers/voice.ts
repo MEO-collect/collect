@@ -4,6 +4,8 @@ import { invokeLLM } from "../_core/llm";
 import { getKarteFormat, DEFAULT_KARTE_FORMAT_ID } from "../../shared/karteFormats";
 import { transcribeWithElevenLabs } from "../lib/elevenlabs";
 import { getMemberProfile } from "../db";
+import { consumeTokens, grantMonthlyTokens } from "../tokenManager";
+import { TRPCError } from "@trpc/server";
 
 const SPEAKER_LABELS = ["話者1", "話者2", "話者3", "話者4"];
 
@@ -264,9 +266,13 @@ export const voiceRouter = router({
       mimeType: z.string().default("audio/webm"),
       speakerCount: z.number().nullable(),
       transcriptionModel: z.string().optional(),
+      audioDurationMinutes: z.number().optional(), // 音声の長さ（分）
     }))
     .mutation(async ({ ctx, input }) => {
       const { audioBase64, mimeType, speakerCount } = input;
+
+      // 月次トークン支給チェック（毎月自動付与）
+      await grantMonthlyTokens(ctx.user.id);
 
       // 書き起こしモデルの決定: 入力値 > プロフィール設定 > デフォルト
       let transcriptionModel = input.transcriptionModel;
@@ -275,6 +281,27 @@ export const voiceRouter = router({
         transcriptionModel = profile?.transcriptionModel || "gemini_2_5_flash";
       }
       console.log(`[transcribe] Using model: ${transcriptionModel}`);
+
+      // トークン消費（音声時間に基づく）
+      const durationMinutes = input.audioDurationMinutes ?? 1;
+      const costKey = transcriptionModel === "elevenlabs_scribe_v2" ? "transcribe_elevenlabs" : "transcribe_gemini";
+      const tokenCostPerMin = costKey === "transcribe_elevenlabs" ? 6 : 2;
+      const totalTokenCost = Math.ceil(durationMinutes * tokenCostPerMin);
+
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        amount: totalTokenCost,
+        appName: "voice",
+        feature: "transcribe",
+        metadata: { model: transcriptionModel, durationMinutes },
+      });
+
+      if (!tokenResult.success) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: tokenResult.errorMessage || "トークンが不足しています",
+        });
+      }
 
       // ElevenLabs Scribe v2を使用する場合
       if (transcriptionModel === "elevenlabs_scribe_v2") {
@@ -356,15 +383,40 @@ export const voiceRouter = router({
       totalChunks: z.number(),
       previousContext: z.string().optional(),
       transcriptionModel: z.string().optional(),
+      chunkDurationMinutes: z.number().optional(), // このチャンクの長さ（分）
     }))
     .mutation(async ({ ctx, input }) => {
       const { audioBase64, mimeType, speakerCount, chunkIndex, totalChunks, previousContext } = input;
+
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
 
       // 書き起こしモデルの決定
       let transcriptionModel = input.transcriptionModel;
       if (!transcriptionModel) {
         const profile = await getMemberProfile(ctx.user.id);
         transcriptionModel = profile?.transcriptionModel || "gemini_2_5_flash";
+      }
+
+      // トークン消費（チャンク単位）
+      const chunkDurationMinutes = input.chunkDurationMinutes ?? 1;
+      const costKey = transcriptionModel === "elevenlabs_scribe_v2" ? "transcribe_elevenlabs" : "transcribe_gemini";
+      const tokenCostPerMin = costKey === "transcribe_elevenlabs" ? 6 : 2;
+      const totalTokenCost = Math.ceil(chunkDurationMinutes * tokenCostPerMin);
+
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        amount: totalTokenCost,
+        appName: "voice",
+        feature: "transcribeChunk",
+        metadata: { model: transcriptionModel, chunkIndex, totalChunks, chunkDurationMinutes },
+      });
+
+      if (!tokenResult.success) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: tokenResult.errorMessage || "トークンが不足しています",
+        });
       }
 
       // ElevenLabs Scribe v2を使用する場合（チャンク分割なしで一括処理）
@@ -447,8 +499,22 @@ export const voiceRouter = router({
     .input(z.object({
       transcription: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { transcription } = input;
+
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "summarize",
+        appName: "voice",
+        feature: "summarize",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
 
       const systemPrompt = `あなたは優秀なビジネスアナリストです。書き起こしテキストを分析し、構造化された要約を作成してください。`;
 
@@ -537,8 +603,22 @@ ${combinedSummaries}`;
         location: z.string().optional(),
       }).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { transcription, template, metadata } = input;
+
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "generate_minutes",
+        appName: "voice",
+        feature: "generateMinutes",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
 
       const chunks = splitTranscriptionIntoChunks(transcription);
 
@@ -694,8 +774,22 @@ ${combinedSummaries}`;
         gender: z.string().optional(),
       }).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { transcription, patientInfo, formatId } = input;
+
+      // 月次トークン支給チェック
+      await grantMonthlyTokens(ctx.user.id);
+
+      // トークン消費
+      const tokenResult = await consumeTokens({
+        userId: ctx.user.id,
+        costKey: "generate_karte",
+        appName: "voice",
+        feature: "generateKarte",
+      });
+      if (!tokenResult.success) {
+        throw new TRPCError({ code: "FORBIDDEN", message: tokenResult.errorMessage || "トークンが不足しています" });
+      }
 
       const format = getKarteFormat(formatId ?? DEFAULT_KARTE_FORMAT_ID);
       const systemPrompt = format.systemPrompt;
