@@ -26,6 +26,48 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
+ * 業種カテゴリ
+ * medical: 医療・クリニック系 → ElevenLabs Scribe v2がデフォルト
+ * other: その他 → Gemini 2.5 Flashがデフォルト
+ */
+export const INDUSTRY_OPTIONS = [
+  { value: "medical", label: "医療・クリニック（内科・外科・歯科・皮膚科など）" },
+  { value: "dental", label: "歯科クリニック" },
+  { value: "welfare", label: "介護・福祉" },
+  { value: "legal", label: "法律・会計・士業" },
+  { value: "real_estate", label: "不動産" },
+  { value: "construction", label: "建設・リフォーム" },
+  { value: "retail", label: "小売・飲食・サービス" },
+  { value: "it", label: "IT・テクノロジー" },
+  { value: "education", label: "教育・研修" },
+  { value: "other", label: "その他" },
+] as const;
+
+export type IndustryValue = typeof INDUSTRY_OPTIONS[number]["value"];
+
+/**
+ * 書き起こしモデル
+ * elevenlabs_scribe_v2: ElevenLabs Scribe v2（日本語最高精度・話者分離対応）
+ * gemini_2_5_flash: Gemini 2.5 Flash（低コスト）
+ * gemini_3_flash: Gemini 3 Flash（最新・低コスト）
+ */
+export const TRANSCRIPTION_MODEL_OPTIONS = [
+  { value: "elevenlabs_scribe_v2", label: "ElevenLabs Scribe v2（高精度・医療向け）" },
+  { value: "gemini_2_5_flash", label: "Gemini 2.5 Flash（低コスト）" },
+  { value: "gemini_3_flash", label: "Gemini 3 Flash（最新・低コスト）" },
+] as const;
+
+export type TranscriptionModelValue = typeof TRANSCRIPTION_MODEL_OPTIONS[number]["value"];
+
+/** 業種に応じたデフォルト書き起こしモデルを返す */
+export function getDefaultTranscriptionModel(industry: IndustryValue): TranscriptionModelValue {
+  if (industry === "medical" || industry === "dental" || industry === "welfare") {
+    return "elevenlabs_scribe_v2";
+  }
+  return "gemini_2_5_flash";
+}
+
+/**
  * Member profile table for BtoB users
  * Stores business-specific information
  */
@@ -38,6 +80,10 @@ export const memberProfiles = mysqlTable("member_profiles", {
   companyName: varchar("companyName", { length: 255 }).notNull(),
   /** メールアドレス */
   contactEmail: varchar("contactEmail", { length: 320 }).notNull(),
+  /** 業種カテゴリ */
+  industry: varchar("industry", { length: 50 }).default("other").notNull(),
+  /** 書き起こしモデル（業種に応じて自動設定、ユーザーが変更可能） */
+  transcriptionModel: varchar("transcriptionModel", { length: 50 }).default("gemini_2_5_flash").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

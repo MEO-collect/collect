@@ -2,21 +2,54 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { 
   AlertTriangle,
   ArrowLeft, 
+  Briefcase,
   Building2, 
   Calendar,
   CreditCard, 
   Loader2, 
   Mail, 
+  Mic,
   RefreshCw,
   User 
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+
+// 業種・書き起こしモデルの選択肢（サーバーコードと同期）
+const INDUSTRY_OPTIONS = [
+  { value: "medical", label: "医療・クリニック（内科・外科・歯科・皮膚科など）" },
+  { value: "dental", label: "歯科クリニック" },
+  { value: "welfare", label: "介護・福祉" },
+  { value: "legal", label: "法律・会計・士業" },
+  { value: "real_estate", label: "不動産" },
+  { value: "construction", label: "建設・リフォーム" },
+  { value: "retail", label: "小売・飲食・サービス" },
+  { value: "it", label: "IT・テクノロジー" },
+  { value: "education", label: "教育・研修" },
+  { value: "other", label: "その他" },
+] as const;
+
+const TRANSCRIPTION_MODEL_OPTIONS = [
+  { value: "elevenlabs_scribe_v2", label: "ElevenLabs Scribe v2（高精度・医療向け）" },
+  { value: "gemini_2_5_flash", label: "Gemini 2.5 Flash（低コスト）" },
+  { value: "gemini_3_flash", label: "Gemini 3 Flash（最新・低コスト）" },
+] as const;
+
+type IndustryValue = typeof INDUSTRY_OPTIONS[number]["value"];
+type TranscriptionModelValue = typeof TRANSCRIPTION_MODEL_OPTIONS[number]["value"];
+
+function getDefaultTranscriptionModel(industry: IndustryValue): TranscriptionModelValue {
+  if (industry === "medical" || industry === "dental" || industry === "welfare") {
+    return "elevenlabs_scribe_v2";
+  }
+  return "gemini_2_5_flash";
+}
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +78,9 @@ export default function Settings() {
   const [contactName, setContactName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [industry, setIndustry] = useState<IndustryValue>("other");
+  const [transcriptionModel, setTranscriptionModel] = useState<TranscriptionModelValue>("gemini_2_5_flash");
+  const [modelManuallyChanged, setModelManuallyChanged] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelConfirmation, setCancelConfirmation] = useState<{
     requiresConfirmation: boolean;
@@ -119,8 +155,23 @@ export default function Settings() {
       setContactName(profile.contactName);
       setCompanyName(profile.companyName);
       setContactEmail(profile.contactEmail);
+      setIndustry((profile.industry as IndustryValue) || "other");
+      setTranscriptionModel((profile.transcriptionModel as TranscriptionModelValue) || "gemini_2_5_flash");
     }
   }, [profile]);
+
+  const handleIndustryChange = (val: string) => {
+    const newIndustry = val as IndustryValue;
+    setIndustry(newIndustry);
+    if (!modelManuallyChanged) {
+      setTranscriptionModel(getDefaultTranscriptionModel(newIndustry));
+    }
+  };
+
+  const handleTranscriptionModelChange = (val: string) => {
+    setTranscriptionModel(val as TranscriptionModelValue);
+    setModelManuallyChanged(true);
+  };
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +179,8 @@ export default function Settings() {
       contactName,
       companyName,
       contactEmail,
+      industry,
+      transcriptionModel,
     });
   };
 
@@ -235,6 +288,52 @@ export default function Settings() {
                   required
                 />
               </div>
+            </div>
+
+            {/* 業種選択 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">業種</Label>
+              <div className="relative">
+                <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                <Select value={industry} onValueChange={handleIndustryChange}>
+                  <SelectTrigger className="pl-11 glass-input h-12 rounded-xl">
+                    <SelectValue placeholder="業種を選択してください" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDUSTRY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 音声書き起こしモデル選択 */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                音声書き起こしAI
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                業種に応じて自動設定されます。任意で変更可能です。
+              </p>
+              <div className="relative">
+                <Mic className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                <Select value={transcriptionModel} onValueChange={handleTranscriptionModelChange}>
+                  <SelectTrigger className="pl-11 glass-input h-12 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSCRIPTION_MODEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(industry === "medical" || industry === "dental" || industry === "welfare") && transcriptionModel === "elevenlabs_scribe_v2" && (
+                <p className="text-xs text-emerald-600 flex items-center gap-1">
+                  <span>✓</span> 医療・クリニック向けに最高精度の ElevenLabs Scribe v2 が設定されています
+                </p>
+              )}
             </div>
 
             <Button 

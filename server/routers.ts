@@ -38,6 +38,8 @@ export const appRouter = router({
         contactName: z.string().min(1, "担当者名は必須です"),
         companyName: z.string().min(1, "会社名/店舗名は必須です"),
         contactEmail: z.string().email("有効なメールアドレスを入力してください"),
+        industry: z.string().optional(),
+        transcriptionModel: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await upsertMemberProfile({
@@ -45,6 +47,8 @@ export const appRouter = router({
           contactName: input.contactName,
           companyName: input.companyName,
           contactEmail: input.contactEmail,
+          industry: input.industry || "other",
+          transcriptionModel: input.transcriptionModel || "gemini_2_5_flash",
         });
         return { success: true };
       }),

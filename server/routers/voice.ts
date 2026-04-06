@@ -2,6 +2,8 @@ import { z } from "zod";
 import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import { getKarteFormat, DEFAULT_KARTE_FORMAT_ID } from "../../shared/karteFormats";
+import { transcribeWithElevenLabs } from "../lib/elevenlabs";
+import { getMemberProfile } from "../db";
 
 const SPEAKER_LABELS = ["話者1", "話者2", "話者3", "話者4"];
 
@@ -261,9 +263,28 @@ export const voiceRouter = router({
       audioBase64: z.string(),
       mimeType: z.string().default("audio/webm"),
       speakerCount: z.number().nullable(),
+      transcriptionModel: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { audioBase64, mimeType, speakerCount } = input;
+
+      // 書き起こしモデルの決定: 入力値 > プロフィール設定 > デフォルト
+      let transcriptionModel = input.transcriptionModel;
+      if (!transcriptionModel) {
+        const profile = await getMemberProfile(ctx.user.id);
+        transcriptionModel = profile?.transcriptionModel || "gemini_2_5_flash";
+      }
+      console.log(`[transcribe] Using model: ${transcriptionModel}`);
+
+      // ElevenLabs Scribe v2を使用する場合
+      if (transcriptionModel === "elevenlabs_scribe_v2") {
+        const result = await transcribeWithElevenLabs({ audioData: audioBase64, mimeType, speakerCount });
+        const { cleaned: transcription, hadLoop } = removeHallucinationLoop(result.labeledText);
+        if (hadLoop) console.warn("[transcribe] ElevenLabs: Hallucination loop detected and removed");
+        return { transcription, hadLoop, tokenUsage: { input: 0, output: 0 }, modelUsed: "elevenlabs_scribe_v2" };
+      }
+
+      // Gemini系モデルを使用する場合
 
       const systemPrompt = `あなたは高精度な音声書き起こしの専門家です。以下のルールに厳密に従って書き起こしを行ってください：
 
@@ -322,6 +343,7 @@ export const voiceRouter = router({
           input: usage.prompt_tokens,
           output: usage.completion_tokens,
         },
+        modelUsed: transcriptionModel,
       };
     }),
 
@@ -332,10 +354,26 @@ export const voiceRouter = router({
       speakerCount: z.number().nullable(),
       chunkIndex: z.number(),
       totalChunks: z.number(),
-      previousContext: z.string().optional(), // 前のチャンクの末尾部分（話者の継続性のため）
+      previousContext: z.string().optional(),
+      transcriptionModel: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { audioBase64, mimeType, speakerCount, chunkIndex, totalChunks, previousContext } = input;
+
+      // 書き起こしモデルの決定
+      let transcriptionModel = input.transcriptionModel;
+      if (!transcriptionModel) {
+        const profile = await getMemberProfile(ctx.user.id);
+        transcriptionModel = profile?.transcriptionModel || "gemini_2_5_flash";
+      }
+
+      // ElevenLabs Scribe v2を使用する場合（チャンク分割なしで一括処理）
+      if (transcriptionModel === "elevenlabs_scribe_v2") {
+        const result = await transcribeWithElevenLabs({ audioData: audioBase64, mimeType, speakerCount });
+        const { cleaned: transcription, hadLoop } = removeHallucinationLoop(result.labeledText);
+        if (hadLoop) console.warn(`[transcribeChunk] ElevenLabs: Hallucination loop detected in chunk ${chunkIndex + 1}/${totalChunks}`);
+        return { transcription, hadLoop, tokenUsage: { input: 0, output: 0 }, modelUsed: "elevenlabs_scribe_v2" };
+      }
 
       const contextNote = previousContext
         ? `\n\n前のチャンクの末尾部分（話者の継続性のための参考）:\n${previousContext}`

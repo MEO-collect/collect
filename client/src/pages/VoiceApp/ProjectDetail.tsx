@@ -248,6 +248,7 @@ export default function ProjectDetail() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedTranscription, setEditedTranscription] = useState("");
   const [speakerCount, setSpeakerCount] = useState<string>("auto");
+  const [transcriptionModel, setTranscriptionModel] = useState<string | null>(null); // null = プロフィール設定を使用
   const [showSpeakerRenameDialog, setShowSpeakerRenameDialog] = useState(false);
   const [speakerRenames, setSpeakerRenames] = useState<Record<string, string>>({});
   const [minutesTemplate, setMinutesTemplate] = useState<"business" | "medical" | "weekly">("business");
@@ -350,6 +351,7 @@ export default function ProjectDetail() {
     error: recordingError,
   } = useAudioRecorder();
 
+  const { data: userProfile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const transcribeMutation = trpc.voice.transcribe.useMutation();
   const transcribeChunkMutation = trpc.voice.transcribeChunk.useMutation();
   const summarizeMutation = trpc.voice.summarize.useMutation();
@@ -583,6 +585,7 @@ export default function ProjectDetail() {
             chunkIndex: chunk.index,
             totalChunks,
             previousContext,
+            transcriptionModel: transcriptionModel || (userProfile?.transcriptionModel ?? undefined),
           });
 
           // チャンク結果を追加
@@ -664,6 +667,7 @@ export default function ProjectDetail() {
         audioBase64,
         mimeType: blob.type || "audio/webm",
         speakerCount: speakerCountNum,
+        transcriptionModel: transcriptionModel || (userProfile?.transcriptionModel ?? undefined),
       });
 
       setProcessingProgress(null);
@@ -1741,7 +1745,7 @@ export default function ProjectDetail() {
 
             {!project.transcription ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <Label className="text-sm font-medium">話者数</Label>
                   <Select value={speakerCount} onValueChange={setSpeakerCount}>
                     <SelectTrigger className="w-32 glass-input rounded-xl">
@@ -1755,6 +1759,25 @@ export default function ProjectDetail() {
                       <SelectItem value="4">4人</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <Label className="text-sm font-medium whitespace-nowrap">書き起こしAI</Label>
+                  <Select
+                    value={transcriptionModel || (userProfile?.transcriptionModel ?? "gemini_2_5_flash")}
+                    onValueChange={(v) => setTranscriptionModel(v)}
+                  >
+                    <SelectTrigger className="w-64 glass-input rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="elevenlabs_scribe_v2">ElevenLabs Scribe v2（高精度・医療向け）</SelectItem>
+                      <SelectItem value="gemini_2_5_flash">Gemini 2.5 Flash（低コスト）</SelectItem>
+                      <SelectItem value="gemini_3_flash">Gemini 3 Flash（最新・低コスト）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!transcriptionModel && userProfile?.transcriptionModel && (
+                    <span className="text-xs text-muted-foreground">ℹ️ プロフィール設定を使用</span>
+                  )}
                 </div>
                 {project.recordingDuration > 1800 && (
                   <div className="p-3 rounded-xl bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 text-sm text-blue-800">

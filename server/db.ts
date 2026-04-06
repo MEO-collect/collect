@@ -108,6 +108,8 @@ export async function upsertMemberProfile(profile: InsertMemberProfile) {
       contactName: profile.contactName,
       companyName: profile.companyName,
       contactEmail: profile.contactEmail,
+      industry: profile.industry,
+      transcriptionModel: profile.transcriptionModel,
     },
   });
 }

@@ -377,3 +377,12 @@
 - [x] llm.tsをManus Built-in APIからGoogle Gemini API（OpenAI互換エンドポイント）に切り替え
 - [x] 書き起こし（Whisper）はBuilt-in APIのまま維持
 - [x] テストとビルド確認
+
+## ElevenLabs Scribe v2 & 業種選択・書き起こしモデル切り替え（2026-04-06）
+- [ ] DBスキーマにindustry（業種）とtranscriptionModel（書き起こしモデル）を追加
+- [ ] ElevenLabs Scribe v2の書き起こし実装（server/lib/elevenlabs.ts）
+- [ ] Gemini 2.5 Flash / Gemini 3 Flashの書き起こし実装
+- [ ] voice.tsのtranscribe/transcribeChunkをモデル切り替え対応に更新
+- [ ] Register.tsxに業種選択UIを追加（業種に応じてデフォルトモデルを自動設定）
+- [ ] Settings.tsxに業種・書き起こしモデル変更UIを追加
+- [ ] ElevenLabs APIキーのバリデーションテストを追加

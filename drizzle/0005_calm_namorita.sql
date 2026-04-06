@@ -1,0 +1,2 @@
+ALTER TABLE `member_profiles` ADD `industry` varchar(50) DEFAULT 'other' NOT NULL;--> statement-breakpoint
+ALTER TABLE `member_profiles` ADD `transcriptionModel` varchar(50) DEFAULT 'gemini_2_5_flash' NOT NULL;
