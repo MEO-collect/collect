@@ -14,6 +14,10 @@ import {
   TrendingDown,
   Zap,
   Gem,
+  Mic,
+  ImageIcon,
+  FileText,
+  Stethoscope,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -297,11 +301,26 @@ export default function TokensPage() {
                         <div className="space-y-1 py-1 border-t border-border/50">
                           <p className="text-xs font-medium text-muted-foreground">このトークンでできること</p>
                           <ul className="text-xs text-foreground space-y-0.5">
-                            <li>🎤 書き起こし <span className="font-bold text-primary">{u.scribeMinutes}分</span><span className="text-muted-foreground">（Scribe）</span></li>
-                            <li>🎤 書き起こし <span className="font-bold text-emerald-600">{u.geminiMinutes}分</span><span className="text-muted-foreground">（Gemini）</span></li>
-                            <li>🖼️ 画像加工 <span className="font-bold text-primary">{u.imageEdits}枚</span></li>
-                            <li>📝 要約生成 <span className="font-bold text-primary">{u.summaries}回</span></li>
-                            <li>🔬 商材ドクター <span className="font-bold text-primary">{u.shozai}回</span></li>
+                            <li className="flex items-center gap-1">
+                              <Mic className="h-3 w-3 text-primary shrink-0" />
+                              <span>書き起こし <span className="font-bold text-primary">{u.scribeMinutes}分</span><span className="text-muted-foreground">（Scribe）</span></span>
+                            </li>
+                            <li className="flex items-center gap-1">
+                              <Mic className="h-3 w-3 text-emerald-600 shrink-0" />
+                              <span>書き起こし <span className="font-bold text-emerald-600">{u.geminiMinutes}分</span><span className="text-muted-foreground">（Gemini）</span></span>
+                            </li>
+                            <li className="flex items-center gap-1">
+                              <ImageIcon className="h-3 w-3 text-primary shrink-0" />
+                              <span>画像加工 <span className="font-bold text-primary">{u.imageEdits}枚</span></span>
+                            </li>
+                            <li className="flex items-center gap-1">
+                              <FileText className="h-3 w-3 text-primary shrink-0" />
+                              <span>要約生成 <span className="font-bold text-primary">{u.summaries}回</span></span>
+                            </li>
+                            <li className="flex items-center gap-1">
+                              <Stethoscope className="h-3 w-3 text-primary shrink-0" />
+                              <span>商材ドクター <span className="font-bold text-primary">{u.shozai}回</span></span>
+                            </li>
                           </ul>
                         </div>
                       );
