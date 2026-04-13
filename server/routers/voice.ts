@@ -3,6 +3,7 @@ import { subscribedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import { getKarteFormat, DEFAULT_KARTE_FORMAT_ID } from "../../shared/karteFormats";
 import { transcribeWithElevenLabs } from "../lib/elevenlabs";
+import { transcribeWithGemini } from "../lib/geminiTranscribe";
 import { getMemberProfile } from "../db";
 import { consumeTokens, grantMonthlyTokens } from "../tokenManager";
 import { TRPCError } from "@trpc/server";
@@ -333,42 +334,26 @@ export const voiceRouter = router({
 
 音声を書き起こしてください。`;
 
-      const response = await invokeLLM({
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              {
-                type: "file_url",
-                file_url: {
-                  url: `data:${mimeType};base64,${audioBase64}`,
-                  mime_type: mimeType as "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4",
-                },
-              },
-              {
-                type: "text",
-                text: "この音声を書き起こしてください。",
-              },
-            ],
-          },
-        ],
+      // GeminiネイティブAPIを使用して音声を書き起こす（inline_data形式）
+      const geminiResult = await transcribeWithGemini({
+        audioBase64,
+        mimeType,
+        systemPrompt,
+        userText: "この音声を書き起こしてください。",
+        model: transcriptionModel === "gemini_3_flash" ? "gemini-2.0-flash" : "gemini-2.5-flash",
       });
 
-      const content = response.choices[0]?.message?.content;
-      const rawTranscription = typeof content === "string" ? content : "";
-      const { cleaned: transcription, hadLoop } = removeHallucinationLoop(rawTranscription);
+      const { cleaned: transcription, hadLoop } = removeHallucinationLoop(geminiResult.text);
       if (hadLoop) {
         console.warn("[transcribe] Hallucination loop detected and removed from transcription");
       }
-      const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
       return {
         transcription,
         hadLoop,
         tokenUsage: {
-          input: usage.prompt_tokens,
-          output: usage.completion_tokens,
+          input: geminiResult.inputTokens,
+          output: geminiResult.outputTokens,
         },
         modelUsed: transcriptionModel,
       };
@@ -455,42 +440,26 @@ export const voiceRouter = router({
 
 音声を書き起こしてください。`;
 
-      const response = await invokeLLM({
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              {
-                type: "file_url",
-                file_url: {
-                  url: `data:${mimeType};base64,${audioBase64}`,
-                  mime_type: mimeType as "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4",
-                },
-              },
-              {
-                type: "text",
-                text: `この音声（全${totalChunks}チャンクの第${chunkIndex + 1}チャンク）を書き起こしてください。`,
-              },
-            ],
-          },
-        ],
+      // GeminiネイティブAPIを使用してチャンクを書き起こす（inline_data形式）
+      const geminiChunkResult = await transcribeWithGemini({
+        audioBase64,
+        mimeType,
+        systemPrompt,
+        userText: `この音声（全${totalChunks}チャンクの第${chunkIndex + 1}チャンク）を書き起こしてください。`,
+        model: transcriptionModel === "gemini_3_flash" ? "gemini-2.0-flash" : "gemini-2.5-flash",
       });
 
-      const content = response.choices[0]?.message?.content;
-      const rawTranscription = typeof content === "string" ? content : "";
-      const { cleaned: transcription, hadLoop } = removeHallucinationLoop(rawTranscription);
+      const { cleaned: transcription, hadLoop } = removeHallucinationLoop(geminiChunkResult.text);
       if (hadLoop) {
         console.warn(`[transcribeChunk] Hallucination loop detected in chunk ${chunkIndex + 1}/${totalChunks} and removed`);
       }
-      const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
       return {
         transcription,
         hadLoop,
         tokenUsage: {
-          input: usage.prompt_tokens,
-          output: usage.completion_tokens,
+          input: geminiChunkResult.inputTokens,
+          output: geminiChunkResult.outputTokens,
         },
       };
     }),
