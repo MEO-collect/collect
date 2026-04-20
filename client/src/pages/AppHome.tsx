@@ -311,8 +311,8 @@ export default function AppHome() {
       title: "AI文章作成",
       description: "SNS・ブログ・MEO用の文章をAIで自動生成。Instagram、LINE、ブログ、GBPに対応",
       icon: <PenTool className="h-6 w-6 text-primary" />,
-      isLocked: false,
-      isComingSoon: true,
+      isLocked: !isSubscriptionActive,
+      isComingSoon: false,
       path: "/app/bizwriter",
     },
     {
@@ -320,8 +320,8 @@ export default function AppHome() {
       title: "AI画像加工",
       description: "AIで写真を美しく加工。フォトエディター＆マジック消しゴムで、プロ級の画像編集を実現します",
       icon: <Image className="h-6 w-6 text-primary" />,
-      isLocked: false,
-      isComingSoon: true,
+      isLocked: !isSubscriptionActive,
+      isComingSoon: false,
       path: "/app/image",
     },
     {
